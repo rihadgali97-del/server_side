@@ -1,0 +1,131 @@
+const Product = require('../models/Product');
+const Order = require('../models/Order');
+const Transaction = require('../models/Transaction');
+const mongoose = require('mongoose');
+const notificationService = require('./notificationService');
+
+class VendorService {
+    /**
+     * Updates Vendor Rank based on performance stats and notifies the user.
+     * This uses the specialized notification function created in the notificationService.
+     */
+    async updateVendorRank(vendorInstance, io) {
+        const stats = await this.getStats(vendorInstance._id);
+        const currentRank = vendorInstance.rank || 'Bronze';
+        let newRank = currentRank;
+
+        // Logic: Thresholds for rank progression
+        if (stats.totalRevenue >= 10000 || stats.totalItemsSold >= 500) {
+            newRank = 'Platinum';
+        } else if (stats.totalRevenue >= 5000 || stats.totalItemsSold >= 100) {
+            newRank = 'Gold Seller';
+        } else if (stats.totalRevenue >= 1000) {
+            newRank = 'Silver';
+        }
+
+        // Only update and notify if a rank-up occurred
+        if (newRank !== currentRank) {
+            vendorInstance.rank = newRank;
+            await vendorInstance.save();
+
+            await notificationService.sendVendorRankNotification({
+                io: io,
+                vendorEmail: vendorInstance.contactEmail,
+                userId: vendorInstance.user, // The owner's user ID
+                newRank: newRank
+            });
+
+            return { updated: true, rank: newRank };
+        }
+
+        return { updated: false, rank: currentRank };
+    }
+
+    async getStats(vendorId) {
+        const stats = await Order.aggregate([
+            { $unwind: "$orderItems" },
+            { $match: { "orderItems.vendor": new mongoose.Types.ObjectId(vendorId) } },
+            {
+                $group: {
+                    _id: vendorId,
+                    totalOrders: { $sum: 1 },
+                    totalItemsSold: { $sum: "$orderItems.quantity" },
+                    totalRevenue: { $sum: { $multiply: ["$orderItems.price", "$orderItems.quantity"] } },
+                    netEarnings: { $sum: "$orderItems.vendorEarnings" },
+                    pendingEarnings: {
+                        $sum: { $cond: [{ $ne: ["$status", "delivered"] }, "$orderItems.vendorEarnings", 0] }
+                    }
+                }
+            }
+        ]);
+        return stats[0] || { totalOrders: 0, totalItemsSold: 0, totalRevenue: 0, netEarnings: 0, pendingEarnings: 0 };
+    }
+
+    async updateProfile(vendorInstance, updateData) {
+        const fields = ['businessName', 'description', 'businessAddress', 'contactEmail', 'contactPhone', 'logo'];
+        fields.forEach(field => { 
+            if (updateData[field]) vendorInstance[field] = updateData[field]; 
+        });
+        return await vendorInstance.save();
+    }
+
+    async getProducts(vendorId, { skip, pageSize }) {
+        const filter = { vendor: vendorId };
+        const products = await Product.find(filter)
+            .populate('category', 'name')
+            .skip(skip)
+            .limit(pageSize)
+            .sort({ createdAt: -1 });
+        const total = await Product.countDocuments(filter);
+        return { products, total };
+    }
+
+    async addProduct(vendorId, data) {
+        return await Product.create({ ...data, vendor: vendorId });
+    }
+
+    async updateProduct(productId, vendorId, data) {
+        const product = await Product.findOneAndUpdate(
+            { _id: productId, vendor: vendorId }, 
+            data, 
+            { new: true }
+        );
+        if (!product) throw new Error('Product not found or unauthorized');
+        return product;
+    }
+
+    async deleteProduct(productId, vendorId) {
+        return await Product.findOneAndDelete({ _id: productId, vendor: vendorId });
+    }
+
+    async getOrders(vendorId, { skip, pageSize }) {
+        const orders = await Order.find({ 'orderItems.vendor': vendorId })
+            .populate('user', 'name')
+            .skip(skip)
+            .limit(pageSize)
+            .sort({ createdAt: -1 });
+        
+        const total = await Order.countDocuments({ 'orderItems.vendor': vendorId });
+        
+        const ordersWithVendorTotals = orders.map(order => ({
+            ...order.toObject(),
+            vendorItems: order.orderItems.filter(i => i.vendor.toString() === vendorId.toString()),
+            myTotalEarnings: order.orderItems
+                .filter(i => i.vendor.toString() === vendorId.toString())
+                .reduce((a, b) => a + b.vendorEarnings, 0)
+        }));
+
+        return { orders: ordersWithVendorTotals, total };
+    }
+
+    async getTransactions(walletId, { skip, pageSize }) {
+        const transactions = await Transaction.find({ wallet: walletId })
+            .skip(skip)
+            .limit(pageSize)
+            .sort({ createdAt: -1 });
+        const total = await Transaction.countDocuments({ wallet: walletId });
+        return { transactions, total };
+    }
+}
+
+module.exports = new VendorService();

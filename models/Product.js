@@ -1,0 +1,45 @@
+const mongoose = require("mongoose");
+
+const productSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    description: { type: String },
+    price: { type: Number, required: true },
+    stock: { type: Number, required: true },
+    image: { type: String },
+    lowStockThreshold: { type: Number, default: 5 },
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      required: true
+    },
+    vendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User", // Matches your current auth system
+      required: true
+    },
+    averageRating: { type: Number, default: 0, min: 0, max: 5 },
+    totalReviews: { type: Number, default: 0 },
+    variants: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ProductVariant'
+    }],
+    tags: [String] // Added tags field to support more granular searching
+  },
+  { timestamps: true }
+);
+
+// Compound text index for Trust-Weighted Search
+productSchema.index({ 
+  name: 'text', 
+  description: 'text', 
+  tags: 'text' 
+}, {
+  weights: {
+    name: 10,       // Matches in the name are most important
+    tags: 5,        // Tags have medium importance
+    description: 2  // Descriptions have lower importance
+  }
+});
+
+module.exports = mongoose.model("Product", productSchema);
