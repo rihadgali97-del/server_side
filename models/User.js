@@ -13,17 +13,26 @@ const userSchema = new mongoose.Schema({
     settings: { notifications: notificationSchema },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    isVerified: { type: Boolean, default: false },
+    isVerified: { type: Boolean, default: false }, // Matches your 'isEmailVerified' logic
     verificationToken: String,
     verificationTokenExpires: Date,
 
     // Reputation System for Digital Trust
     reputation: {
         score: { type: Number, default: 20, min: 0, max: 100 },
-        rank: { type: String, enum: ["New", "Trusted", "Elite", "Legendary"], default: "New" },
+        // Added 'Starter' and 'Unverified' to match your TrustService logic
+        rank: { 
+            type: String, 
+            enum: ["Unverified", "Starter", "Trusted", "Elite", "Legendary"], 
+            default: "Starter" 
+        },
         metrics: {
-            successfulOrders: { type: Number, default: 0 },
+            successfulOrders: { type: Number, default: 0 }, // Use this consistently!
             cancelledOrders: { type: Number, default: 0 },
+            totalReviews: { type: Number, default: 0 },
+            positiveFeedbackRatio: { type: Number, default: 0 },
+            averageDeliveryHours: { type: Number, default: 0 }, // For the Speed Pillar
+            lastOrderDate: { type: Date } // For Recency Bias
         }
     }
 }, { timestamps: true });

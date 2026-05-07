@@ -1,3 +1,4 @@
+const Vendor = require('../models/Vendor');
 const vendorService = require('../services/VendorService');
 const walletService = require('../services/WalletService');
 const orderService = require('../services/OrderService');
@@ -144,6 +145,56 @@ exports.getPublicVendorProfile = async (req, res) => {
         };
 
         res.json({ success: true, data: vendor, trustMetadata });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.getVendorAnalytics = async (req, res) => {
+    try {
+        const vendorId = req.user._id;
+
+        // 1. Sales Trend (Last 7 Days)
+        const salesTrend = await Order.aggregate([
+            { $unwind: "$orderItems" },
+            { $match: { "orderItems.vendor": vendorId, isPaid: true } },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    dailyRevenue: { $sum: "$orderItems.vendorEarnings" },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id": 1 } },
+            { $limit: 7 }
+        ]);
+
+        // 2. Category Distribution (Products per category)
+        const categoryData = await Product.aggregate([
+            { $match: { vendor: vendorId } },
+            {
+                $group: {
+                    _id: "$category",
+                    productCount: { $sum: 1 }
+                }
+            },
+            {
+                $lookup: {
+                    from: "categories",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "categoryInfo"
+                }
+            },
+            { $unwind: "$categoryInfo" },
+            {
+                $project: {
+                    name: "$categoryInfo.name",
+                    value: "$productCount"
+                }
+            }
+        ]);
+
+        res.json({ success: true, salesTrend, categoryData });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

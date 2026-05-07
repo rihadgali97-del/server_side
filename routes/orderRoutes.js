@@ -4,9 +4,11 @@ const {
   createOrder,
   getOrders,
   getOrderById,
-  updateOrderStatus
+  updateOrderStatus,
+  getVendorOrders
 } = require("../controller/orderController");
 const { protect, authorizeRoles } = require("../middleware/authMiddleware");
+
 
 /**
  * @openapi
@@ -126,5 +128,5 @@ router.get("/:id", protect, getOrderById);
  *         description: Status updated and rank checked
  */
 router.put("/:id/status", protect, authorizeRoles("admin", "vendor"), updateOrderStatus);
-
+router.get("/vendor/all", protect, authorizeRoles("vendor"), getVendorOrders);
 module.exports = router;

@@ -15,7 +15,7 @@ const apiLimiter = rateLimit({
 // Stricter limiter for Auth routes (Login/Register) to prevent brute force
 const authLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 10, // Limit each IP to 10 requests per hour for auth
+    max: 100, // Limit each IP to 100 requests per hour for auth
     message: {
         success: false,
         message: "Too many login/registration attempts. Please try again in an hour."

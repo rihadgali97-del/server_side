@@ -41,25 +41,42 @@ class VendorService {
         return { updated: false, rank: currentRank };
     }
 
-    async getStats(vendorId) {
-        const stats = await Order.aggregate([
-            { $unwind: "$orderItems" },
-            { $match: { "orderItems.vendor": new mongoose.Types.ObjectId(vendorId) } },
-            {
-                $group: {
-                    _id: vendorId,
-                    totalOrders: { $sum: 1 },
-                    totalItemsSold: { $sum: "$orderItems.quantity" },
-                    totalRevenue: { $sum: { $multiply: ["$orderItems.price", "$orderItems.quantity"] } },
-                    netEarnings: { $sum: "$orderItems.vendorEarnings" },
-                    pendingEarnings: {
-                        $sum: { $cond: [{ $ne: ["$status", "delivered"] }, "$orderItems.vendorEarnings", 0] }
-                    }
+async getStats(vendorId) {
+    // 1. Keep your existing aggregation exactly as it is
+    const stats = await Order.aggregate([
+        { $unwind: "$orderItems" },
+        { $match: { "orderItems.vendor": new mongoose.Types.ObjectId(vendorId) } },
+        {
+            $group: {
+                _id: vendorId,
+                totalOrders: { $sum: 1 },
+                totalItemsSold: { $sum: "$orderItems.quantity" },
+                totalRevenue: { $sum: { $multiply: ["$orderItems.price", "$orderItems.quantity"] } },
+                netEarnings: { $sum: "$orderItems.vendorEarnings" },
+                pendingEarnings: {
+                    $sum: { $cond: [{ $ne: ["$status", "delivered"] }, "$orderItems.vendorEarnings", 0] }
                 }
             }
-        ]);
-        return stats[0] || { totalOrders: 0, totalItemsSold: 0, totalRevenue: 0, netEarnings: 0, pendingEarnings: 0 };
-    }
+        }
+    ]);
+
+    // 2. Add this specific line to count your products
+    const totalProducts = await Product.countDocuments({ vendor: vendorId });
+
+    // 3. Merge the product count into  existing return object
+    const result = stats[0] || { 
+        totalOrders: 0, 
+        totalItemsSold: 0, 
+        totalRevenue: 0, 
+        netEarnings: 0, 
+        pendingEarnings: 0 
+    };
+
+    return {
+        ...result,
+        totalProducts 
+    };
+}
 
     async updateProfile(vendorInstance, updateData) {
         const fields = ['businessName', 'description', 'businessAddress', 'contactEmail', 'contactPhone', 'logo'];

@@ -55,6 +55,9 @@ class OrderService {
         }
     };
 
+    /**
+     * Create Order - Handles stock, escrow, and cart clearing
+     */
     async createOrder(orderData, userId) {
         const session = await mongoose.startSession();
         session.startTransaction();
@@ -112,6 +115,9 @@ class OrderService {
         }
     }
 
+    /**
+     * Update Status - Triggers Trust Score calculations and Escrow release
+     */
     async updateStatus(orderId, newStatus) {
         const session = await mongoose.startSession();
         session.startTransaction();
@@ -134,7 +140,6 @@ class OrderService {
                         session
                     );
                     
-                    // Reputation logic stays the same
                     const vendor = await Vendor.findOne({ 
                         $or: [{ _id: item.vendor }, { user: item.vendor }] 
                     }).session(session);
@@ -172,6 +177,33 @@ class OrderService {
             throw error;
         } finally {
             session.endSession();
+        }
+    }
+
+    /**
+     * Fetch all orders containing products belonging to a specific Vendor
+     */
+    async getVendorOrders(vendorId) {
+        try {
+            return await Order.find({
+                "orderItems.vendor": vendorId
+            })
+            .populate("user", "name email")
+            .sort({ createdAt: -1 });
+        } catch (error) {
+            throw new Error("Error fetching vendor orders: " + error.message);
+        }
+    }
+
+    /**
+     * Fetch all orders placed by a specific User
+     */
+    async getOrdersByUser(userId) {
+        try {
+            return await Order.find({ user: userId })
+                .sort({ createdAt: -1 });
+        } catch (error) {
+            throw new Error("Error fetching user orders: " + error.message);
         }
     }
 }

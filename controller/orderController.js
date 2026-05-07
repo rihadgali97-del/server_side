@@ -1,10 +1,11 @@
 const orderService = require("../services/orderService");
 const paymentFactory = require("../services/payment/PaymentFactory");
 const notificationService = require("../services/notificationService");
+const trustService = require("../services/TrustService"); // Imported TrustService
 const User = require("../models/User");
 const Order = require("../models/Order");
 
-// @desc    Create new order
+// @desc    Create new order (Kept your original logic)
 exports.createOrder = async (req, res) => {
     try {
         const userId = req.user._id || req.user.id;
@@ -18,7 +19,6 @@ exports.createOrder = async (req, res) => {
             }
         }
 
-        // Send notifications (wrapped to prevent crashing on email error)
         try {
             const io = req.app.get("io");
             const vendorIds = [...new Set(result.order.orderItems.map(item => item.vendor).filter(Boolean))];
@@ -44,21 +44,51 @@ exports.createOrder = async (req, res) => {
 // @desc    Update order status and trigger Trust Engine
 exports.updateOrderStatus = async (req, res) => {
     try {
-        // 1. Update status and trigger reputation logic in Service
-        const order = await orderService.updateStatus(req.params.id, req.body.status);
-        
-        // 2. Notify Customer (wrapped to ignore ECONNREFUSED errors)
+        const { status } = req.body;
+        const order = await orderService.updateStatus(req.params.id, status);
+        const vendorId = order.orderItems[0]?.vendor;
+
+        if (vendorId && (status === 'delivered' || status === 'cancelled')) {
+            const vendor = await User.findById(vendorId);
+            const currentMetrics = vendor.reputation.metrics;
+
+            if (status === 'delivered') {
+                // 1. Calculate Delivery Latency
+                const newDeliveryTime = Math.abs(new Date() - new Date(order.createdAt)) / 36e5; // hours
+                
+                // 2. Moving Average Formula: (OldAvg * Count + NewVal) / (Count + 1)
+                const oldCount = currentMetrics.successfulOrders || 0;
+                const oldAvg = currentMetrics.averageDeliveryHours || 0;
+                const updatedAvg = ((oldAvg * oldCount) + newDeliveryTime) / (oldCount + 1);
+
+                await User.findByIdAndUpdate(vendorId, {
+                    $inc: { 'reputation.metrics.successfulOrders': 1 },
+                    $set: { 
+                        'reputation.metrics.averageDeliveryHours': updatedAvg,
+                        'reputation.metrics.lastOrderDate': new Date() 
+                    }
+                });
+            } else if (status === 'cancelled') {
+                await User.findByIdAndUpdate(vendorId, {
+                    $inc: { 'reputation.metrics.cancelledOrders': 1 },
+                    $set: { 'reputation.metrics.lastOrderDate': new Date() }
+                });
+            }
+            
+            // Recalculate Trust Score after metrics update
+            await trustService.updateTrustScore(vendorId);
+        }
+
+        // --- Notification Logic (Unchanged) ---
         try {
             const io = req.app.get("io");
             const customer = await User.findById(order.user);
             if (io && customer) {
                 await notificationService.sendOrderStatusNotification({
-                    io, userEmail: customer.email, userId: customer._id, orderId: order._id, status: req.body.status
+                    io, userEmail: customer.email, userId: customer._id, orderId: order._id, status
                 });
             }
-        } catch (notifyError) {
-            console.error("Notification Error (Status Update):", notifyError.message);
-        }
+        } catch (err) { console.error("Notify Error:", err.message); }
 
         res.json({ success: true, order });
     } catch (error) {
@@ -89,7 +119,7 @@ exports.getOrderById = async (req, res) => {
         const userId = req.user._id || req.user.id;
         const isOwner = order.user._id.toString() === userId.toString();
         const isAdmin = req.user.role === 'admin';
-        const isVendorOfItem = order.orderItems.some(item => item.vendor.toString() === userId.toString());
+        const isVendorOfItem = order.orderItems.some(item => item.vendor?.toString() === userId.toString());
 
         if (!isOwner && !isAdmin && !isVendorOfItem) {
             return res.status(401).json({ message: "Not authorized" });
@@ -98,5 +128,14 @@ exports.getOrderById = async (req, res) => {
         res.status(200).json(order);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+exports.getVendorOrders = async (req, res) => {
+    try {
+        const orders = await orderService.getVendorOrders(req.user._id);
+        res.status(200).json({ success: true, orders });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
