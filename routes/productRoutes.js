@@ -15,7 +15,8 @@ const {
   getProducts,
   getProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  searchProducts
 } = require("../controller/productController");
 
 /**
@@ -40,6 +41,7 @@ const {
  *         description: Success
  */
 router.get("/", getProducts);
+router.get("/search", searchProducts);
 
 /**
  * @openapi

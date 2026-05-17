@@ -25,7 +25,7 @@ const createProduct = async (userId, body, filePath, io) => {
 
 const fetchProducts = async (filters, user) => {
     let query = {};
-    const { name, category, minPrice, maxPrice, all } = filters;
+    const { name, category, minPrice, maxPrice, all, lng, lat } = filters;
 
     if (name) query.name = { $regex: name, $options: "i" };
     if (category) query.category = category;
@@ -42,13 +42,40 @@ const fetchProducts = async (filters, user) => {
         else return []; // Return empty if vendor profile missing
     }
 
+    // Geospatial filter for standard customer views
+    let nearbyVendorIds = [];
+    if (lng && lat && !(user && user.role === 'vendor')) {
+        const sortedVendors = await Vendor.find({
+            location: {
+                $near: {
+                    $geometry: { type: "Point", coordinates: [parseFloat(lng), parseFloat(lat)] }
+                }
+            }
+        }).select('_id').lean();
+        
+        nearbyVendorIds = sortedVendors.map(v => v._id);
+        query.vendor = { $in: nearbyVendorIds };
+    }
+
     if (all === 'true' && user && user.role === 'admin') {
         query = {};
     }
 
-    return await Product.find(query)
+    let products = await Product.find(query)
         .populate("category", "name")
         .populate("vendor", "businessName");
+
+    // Preserve physical proximity sort order for basic find results
+    if (nearbyVendorIds.length > 0) {
+        const idOrder = nearbyVendorIds.map(id => id.toString());
+        products.sort((a, b) => {
+            const indexA = a.vendor ? idOrder.indexOf(a.vendor._id.toString()) : -1;
+            const indexB = b.vendor ? idOrder.indexOf(b.vendor._id.toString()) : -1;
+            return (indexA === -1 ? Infinity : indexA) - (indexB === -1 ? Infinity : indexB);
+        });
+    }
+
+    return products;
 };
 
 const updateProductData = async (id, body, io) => {
@@ -77,7 +104,7 @@ const removeProduct = async (id) => {
 };
 
 const executeTrustSearch = async (searchParams) => {
-    const { q, category, minPrice, maxPrice } = searchParams;
+    const { q, category, minPrice, maxPrice, lng, lat } = searchParams;
     const page = parseInt(searchParams.page) || 1;
     const limit = parseInt(searchParams.limit) || 12;
     const skip = (page - 1) * limit;
@@ -91,7 +118,23 @@ const executeTrustSearch = async (searchParams) => {
         if (maxPrice) queryFilter.price.$lte = Number(maxPrice);
     }
 
-    const products = await Product.aggregate([
+    // 1. Fetch vendors ordered by proximity if coordinates are supplied
+    let nearbyVendorIds = [];
+    if (lng && lat) {
+        const vendors = await Vendor.find({
+            location: {
+                $near: {
+                    $geometry: { type: "Point", coordinates: [parseFloat(lng), parseFloat(lat)] }
+                }
+            }
+        }).select('_id').lean();
+        
+        nearbyVendorIds = vendors.map(v => v._id);
+        queryFilter.vendor = { $in: nearbyVendorIds };
+    }
+
+    // 2. Formulate aggregation steps
+    const pipeline = [
         { $match: queryFilter },
         {
             $lookup: {
@@ -101,26 +144,48 @@ const executeTrustSearch = async (searchParams) => {
                 as: 'vendorDetails'
             }
         },
-        { $unwind: '$vendorDetails' },
-        {
-            $addFields: {
-                trustWeight: {
-                    $add: [
-                        { $multiply: ["$vendorDetails.reputation.score", 0.5] },
-                        { $cond: ["$vendorDetails.isVerified", 20, 0] },
-                        { $multiply: ["$averageRating", 5] }
-                    ]
-                },
-                searchScore: { $meta: "textScore" }
-            }
-        },
-        { $sort: { searchScore: { $meta: "textScore" }, trustWeight: -1 } },
-        { $skip: skip },
-        { $limit: limit },
-        { $project: { vendorDetails: 0, searchScore: 0 } }
-    ]);
+        { $unwind: '$vendorDetails' }
+    ];
 
+    // 3. Inject dynamic fields (Trust, Text matching score, and Proximity rankings)
+    const addFieldsData = {
+        trustWeight: {
+            $add: [
+                { $multiply: [{ $ifNull: ["$vendorDetails.reputation.score", 0] }, 0.5] },
+                { $cond: ["$vendorDetails.isVerified", 20, 0] },
+                { $multiply: ["$averageRating", 5] }
+            ]
+        }
+    };
+
+    if (q) {
+        addFieldsData.searchScore = { $meta: "textScore" };
+    }
+
+    if (nearbyVendorIds.length > 0) {
+        addFieldsData.distanceRank = { $indexOfArray: [nearbyVendorIds, "$vendor"] };
+    }
+
+    pipeline.push({ $addFields: addFieldsData });
+
+    // 4. Multi-layered Sorting
+    const sortCriteria = {};
+    if (nearbyVendorIds.length > 0) {
+        sortCriteria.distanceRank = 1; 
+    }
+    if (q) {
+        sortCriteria.searchScore = { $meta: "textScore" };
+    }
+    sortCriteria.trustWeight = -1;
+
+    pipeline.push({ $sort: sortCriteria });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limit });
+    pipeline.push({ $project: { vendorDetails: 0, searchScore: 0, distanceRank: 0 } });
+
+    const products = await Product.aggregate(pipeline);
     const total = await Product.countDocuments(queryFilter);
+
     return { products, total, page, limit };
 };
 

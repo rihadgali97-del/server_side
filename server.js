@@ -54,6 +54,9 @@ const settingsRoutes = require("./routes/settingsRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const notificationService = require('./services/notificationService');
 const searchRoutes = require('./routes/searchRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+// Report Routes
+app.use('/api/reports', reportRoutes);
 // 8. Mount Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);

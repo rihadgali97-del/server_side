@@ -27,6 +27,19 @@ exports.getVendorProfile = async (req, res) => {
 
 exports.updateVendorProfile = async (req, res) => {
     try {
+        // Intercept profile changes to format incoming location updates into GeoJSON Point objects
+        if (req.body.longitude !== undefined && req.body.latitude !== undefined) {
+            req.body.location = {
+                type: 'Point',
+                coordinates: [parseFloat(req.body.longitude), parseFloat(req.body.latitude)]
+            };
+        } else if (req.body.lng !== undefined && req.body.lat !== undefined) {
+            req.body.location = {
+                type: 'Point',
+                coordinates: [parseFloat(req.body.lng), parseFloat(req.body.lat)]
+            };
+        }
+
         const updatedVendor = await vendorService.updateProfile(req.vendor, req.body);
         res.json({ success: true, data: updatedVendor });
     } catch (error) {
@@ -137,7 +150,6 @@ exports.getPublicVendorProfile = async (req, res) => {
 
         if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
 
-        // Add "Trust Metadata" for the frontend to decide which badge to show
         const trustMetadata = {
             isHighlyTrusted: vendor.reputation.score > 80,
             badgeColor: vendor.reputation.rank === 'Legendary' ? '#FFD700' : '#4CAF50',
@@ -149,6 +161,7 @@ exports.getPublicVendorProfile = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
 exports.getVendorAnalytics = async (req, res) => {
     try {
         const vendorId = req.user._id;

@@ -15,7 +15,7 @@ const productSchema = new mongoose.Schema(
     },
     vendor: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // Matches your current auth system
+      ref: "User", 
       required: true
     },
     averageRating: { type: Number, default: 0, min: 0, max: 5 },
@@ -24,7 +24,7 @@ const productSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'ProductVariant'
     }],
-    tags: [String] // Added tags field to support more granular searching
+    tags: [String]
   },
   { timestamps: true }
 );
@@ -36,9 +36,9 @@ productSchema.index({
   tags: 'text' 
 }, {
   weights: {
-    name: 10,       // Matches in the name are most important
-    tags: 5,        // Tags have medium importance
-    description: 2  // Descriptions have lower importance
+    name: 10,       
+    tags: 5,        
+    description: 2  
   }
 });
 

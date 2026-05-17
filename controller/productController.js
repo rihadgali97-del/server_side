@@ -14,6 +14,7 @@ exports.createProduct = async (req, res) => {
 
 exports.getProducts = async (req, res) => {
     try {
+        // req.query can now accept optional 'lng' and 'lat' parameters from the client location
         const products = await productService.fetchProducts(req.query, req.user);
         res.json({ products });
     } catch (error) {
@@ -53,6 +54,8 @@ exports.deleteProduct = async (req, res) => {
 
 exports.searchProducts = async (req, res) => {
     try {
+        // Location coordinates passed via query fields (req.query.lng, req.query.lat) 
+        // are instantly captured and executed inside your Trust Search pipeline.
         const result = await productService.executeTrustSearch(req.query);
         res.json({
             success: true,

@@ -7,6 +7,11 @@ const vendorSchema = new mongoose.Schema({
     businessAddress: {
         street: String, city: String, state: String, zipCode: String, country: String
     },
+    // Geospatial Location tracking for calculating distance to customers
+    location: {
+        type: { type: String, enum: ['Point'], default: 'Point' },
+        coordinates: { type: [Number], default: [0, 0] } // [longitude, latitude]
+    },
     contactEmail: { type: String },
     contactPhone: { type: String },
     taxId: { type: String },
@@ -50,4 +55,7 @@ const vendorSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 vendorSchema.index({ businessName: 1 });
+// Create geospatial index for calculating shortest delivery paths
+vendorSchema.index({ location: "2dsphere" });
+
 module.exports = mongoose.model('Vendor', vendorSchema);

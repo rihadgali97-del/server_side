@@ -11,11 +11,11 @@ const { protect } = require("../middleware/authMiddleware.js");
 const router = express.Router();
 
 // Profile
-router.get("/profile", protect, getProfile);
-router.put("/profile", protect, updateProfile);
+router.get("/", protect, getProfile);
+router.put("/", protect, updateProfile);
 
-// Password
-router.put("/password", protect, changePassword);
+// changing Password
+router.put("/change-password", protect, changePassword);
 
 // Notifications
 router.put("/notifications", protect, updateNotifications);
