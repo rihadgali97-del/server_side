@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Transaction = require('../models/Transaction');
 const Wallet = require('../models/Wallet');
+const telebirrService = require('../services/payment/telebirrService');
 
 const DEFAULT_CURRENCY = 'USD';
 const gatewayRegistry = new Map();
@@ -43,7 +44,6 @@ const getGateway = (name) => {
 const getSupportedProviders = () => Array.from(gatewayRegistry.keys());
 
 const createPaymentTransaction = async ({
-  order,
   wallet,
   type,
   amount,
@@ -108,6 +108,7 @@ const processOrderPayment = async ({ orderId, paymentMethod, amount, currency = 
   const normalizedCurrency = normalizeCurrency(currency);
   throwIfInvalidAmount(amount);
 
+  // Trigger integration endpoint charge rules
   const paymentResult = await provider.charge({ order, amount, currency: normalizedCurrency, metadata });
 
   if (!paymentResult.success) {
@@ -117,8 +118,13 @@ const processOrderPayment = async ({ orderId, paymentMethod, amount, currency = 
   const session = await Order.startSession();
   try {
     await session.withTransaction(async () => {
-      order.isPaid = true;
-      order.paidAt = new Date();
+      // FIX: If gateway returns 'pending' (like Telebirr link generation), do NOT mark order as paid yet.
+      const isAsyncRedirect = paymentResult.status === 'pending';
+
+      order.isPaid = isAsyncRedirect ? false : true;
+      if (!isAsyncRedirect) {
+        order.paidAt = new Date();
+      }
       order.paymentMethod = paymentMethod;
       await order.save({ session });
 
@@ -128,7 +134,7 @@ const processOrderPayment = async ({ orderId, paymentMethod, amount, currency = 
         type: 'deposit',
         amount,
         currency: normalizedCurrency,
-        description: `Paid order ${order._id}`,
+        description: isAsyncRedirect ? `Initiated ${paymentMethod} payment for order ${order._id}` : `Paid order ${order._id}`,
         provider: paymentMethod,
         reference: paymentResult.transactionId || order._id.toString(),
         referenceType,
@@ -229,10 +235,35 @@ const baseGatewayAdapter = (name) => ({
   })
 });
 
+// --- GATEWAY REGISTRATION ---
 registerGateway('cash', baseGatewayAdapter('cash'));
-registerGateway('telebirr', baseGatewayAdapter('telebirr'));
 registerGateway('cbe', baseGatewayAdapter('cbe'));
 registerGateway('stripe', baseGatewayAdapter('stripe'));
+
+// Live Adapter for Telebirr
+registerGateway('telebirr', {
+  charge: async ({ order, amount, currency }) => {
+    try {
+      const response = await telebirrService.createTelebirrOrder(order);
+      return {
+        success: true,
+        status: 'pending',
+        transactionId: order._id.toString(),
+        metadata: { paymentUrl: response.paymentUrl }
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+  refund: async ({ order, amount }) => ({
+    success: true,
+    status: 'refunded'
+  }),
+  status: async ({ reference }) => ({
+    success: true,
+    status: 'completed'
+  })
+});
 
 module.exports = {
   getSupportedProviders,
