@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/User"); // Added User import
+const User = require("../models/User"); 
 const Vendor = require("../models/Vendor");
 
 const protect = async (req, res, next) => {
@@ -10,7 +10,6 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // FETCH USER FROM DB: This ensures we have the latest 'isVerified' status
       req.user = await User.findById(decoded.id).select("-password");
 
       if (!req.user) {
@@ -38,7 +37,6 @@ const authorizeRoles = (...roles) => {
 };
 
 const isEmailVerified = (req, res, next) => {
-  // Now req.user.isVerified will be accurate because we fetched it in 'protect'
   if (!req.user || !req.user.isVerified) {
     return res.status(403).json({
       message: "Access denied. Please verify your email address first.",
@@ -62,7 +60,6 @@ const isApprovedVendor = async (req, res, next) => {
   next();
 };
 
-// Use one clean export object
 module.exports = { 
   protect, 
   authorizeRoles, 

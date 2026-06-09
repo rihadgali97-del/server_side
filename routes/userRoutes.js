@@ -16,7 +16,8 @@ const {
   updateUser,
   deleteUser,
   getUserWallet,
-  getUserTransactions
+  getUserTransactions,
+  updateLocationControllerMethod
 } = require('../controller/userController');
 
 const { protect } = require('../middleware/authMiddleware');
@@ -156,5 +157,43 @@ router.get('/:id/wallet', protect, getUserWallet);
  *         description: Transaction list retrieved
  */
 router.get('/:id/transactions', protect, getUserTransactions);
+router.put('/location', protect, async (req, res, next) => {
+    try {
+        const { longitude, latitude } = req.body;
+
+        if (longitude === undefined || latitude === undefined) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Latitude and Longitude parameters are mandatory." 
+            });
+        }
+
+        if (Math.abs(longitude) > 180 || Math.abs(latitude) > 90) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Invalid GPS coordinate boundary ranges." 
+            });
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user._id,
+            {
+                location: {
+                    type: "Point",
+                    coordinates: [parseFloat(longitude), parseFloat(latitude)] // [longitude, latitude]
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Your delivery location has been successfully synchronized!",
+            location: updatedUser.location
+        });
+    } catch (error) {
+        next(error); // Passes the error smoothly to your global error middleware
+    }
+});
 
 module.exports = router;

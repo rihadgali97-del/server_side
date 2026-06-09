@@ -6,11 +6,30 @@ const notificationSchema = new mongoose.Schema({
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    role: { type: String, enum: ["customer", "vendor", "admin"], default: "customer" },
-    settings: { notifications: notificationSchema },
+    name: { 
+        type: String, 
+        required: true,
+        trim: true
+    },
+    email: { 
+        type: String, 
+        required: true, 
+        unique: true,
+        lowercase: true,
+        trim: true
+    },
+    password: { 
+        type: String, 
+        required: true 
+    },
+    role: { 
+        type: String, 
+        enum: ["customer", "vendor", "admin"], 
+        default: "customer" 
+    },
+    settings: { 
+        notifications: { type: notificationSchema, default: {} } 
+    },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
     isVerified: { type: Boolean, default: false }, 
@@ -19,8 +38,14 @@ const userSchema = new mongoose.Schema({
 
     // Geospatial Location tracking for Customer proximity matching
     location: {
-        type: { type: String, enum: ['Point'], default: 'Point' },
-        coordinates: { type: [Number], default: [0, 0] } // [longitude, latitude]
+        type: { 
+            type: String, 
+            enum: ['Point']
+            // REMOVED default: 'Point' to prevent automated indexing crashes
+        },
+        coordinates: { 
+            type: [Number] // [longitude, latitude]
+        } 
     },
 
     // Reputation System for Digital Trust
@@ -43,6 +68,6 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Create geospatial index for efficient proximity searches
-userSchema.index({ location: "2dsphere" });
+userSchema.index({ location: "2dsphere" }, { sparse: true });
 
 module.exports = mongoose.model("User", userSchema);
