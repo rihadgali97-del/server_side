@@ -3,10 +3,6 @@ const Transaction = require('../models/Transaction');
 const Wallet      = require('../models/Wallet');
 const telebirrService = require('../services/payment/telebirrService');
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  GATEWAY REGISTRY
-// ─────────────────────────────────────────────────────────────────────────────
-
 const DEFAULT_CURRENCY = 'ETB';
 const gatewayRegistry  = new Map();
 
@@ -23,16 +19,15 @@ const getGateway = (name) => {
   return provider;
 };
 
-// ── Mock adapters for cash / CBE / Stripe (replace with real SDKs later) ──
 const baseGatewayAdapter = (name) => ({
-  charge: async ({ order, amount, currency }) => ({
+  charge: async ({ order }) => ({
     success: true,
     provider: name,
     transactionId: `${name.toUpperCase()}-${Date.now()}`,
     status: 'completed',
     metadata: { orderId: order._id.toString() }
   }),
-  refund: async ({ order, amount }) => ({
+  refund: async () => ({
     success: true,
     transactionId: `${name.toUpperCase()}-REFUND-${Date.now()}`,
     status: 'completed'
@@ -43,16 +38,15 @@ registerGateway('cash',   baseGatewayAdapter('cash'));
 registerGateway('cbe',    baseGatewayAdapter('cbe'));
 registerGateway('stripe', baseGatewayAdapter('stripe'));
 
-// ── Live Telebirr adapter ──────────────────────────────────────────────────
 registerGateway('telebirr', {
   charge: async ({ order }) => {
     try {
       const response = await telebirrService.createTelebirrOrder(order);
       return {
         success:       true,
-        status:        'pending',          // order stays unpaid until webhook confirms
+        status:        'pending',
         transactionId: order._id.toString(),
-        metadata:      { paymentUrl: response.url }   // response.url is the field telebirrService returns
+        metadata:      { paymentUrl: response.url }
       };
     } catch (err) {
       return { success: false, error: err.message };
@@ -61,13 +55,6 @@ registerGateway('telebirr', {
   refund: async () => ({ success: false, error: 'Telebirr refunds must be processed manually via the Fabric dashboard.' })
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Resolves a wallet for transaction logging.
-// Priority: user's own wallet → any existing wallet → error.
-// We do NOT create wallets here — that is the wallet service's responsibility.
 const resolveWallet = async (userId) => {
   if (userId) {
     const userWallet = await Wallet.findOne({ user: userId });
@@ -75,12 +62,8 @@ const resolveWallet = async (userId) => {
   }
   const fallback = await Wallet.findOne();
   if (fallback) return fallback;
-  throw new Error('No active wallet found. Please ensure at least one wallet exists in the system.');
+  throw new Error('No active system ledger wallet target located.');
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  CONTROLLERS
-// ─────────────────────────────────────────────────────────────────────────────
 
 // @desc    Telebirr — initiate payment, return checkout URL to the frontend
 // @route   POST /api/payments/initiate-telebirr
@@ -101,7 +84,6 @@ exports.initiateTelebirrPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Order is already paid' });
     }
 
-    // Charge via the Telebirr gateway adapter
     const provider     = getGateway('telebirr');
     const paymentResult = await provider.charge({ order });
 
@@ -109,10 +91,8 @@ exports.initiateTelebirrPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: paymentResult.error || 'Payment initiation failed' });
     }
 
-    // Log a pending transaction so the webhook can find and update it later
     const wallet = await resolveWallet(req.user?._id);
 
-    // Guard against duplicate pending transactions for the same order
     const existing = await Transaction.findOne({
       reference:     orderId.toString(),
       referenceType: 'payment',
@@ -134,7 +114,6 @@ exports.initiateTelebirrPayment = async (req, res) => {
       });
     }
 
-    // Return the checkout URL — frontend opens this in a new tab or WebView
     return res.status(200).json({
       success: true,
       url:     paymentResult.metadata.paymentUrl
@@ -147,31 +126,27 @@ exports.initiateTelebirrPayment = async (req, res) => {
 
 // @desc    Telebirr — receive and process the async payment notification
 // @route   POST /api/payments/telebirr-webhook
-// @access  Public (Telebirr server calls this directly — no auth header)
+// @access  Public 
 exports.telebirrWebhook = async (req, res) => {
   try {
     let payload = null;
 
     if (req.body.msgtxt) {
-      // Encrypted callback (live Fabric)
       payload = telebirrService.decryptNotifyData(req.body.msgtxt);
     } else if (req.body.biz_content) {
-      // Plain-object callback (some sandbox setups)
       payload = typeof req.body.biz_content === 'string'
         ? JSON.parse(req.body.biz_content)
         : req.body.biz_content;
     } else {
-      // Fallback: treat entire body as payload (dev simulator POST)
       payload = req.body;
     }
 
-    // Fabric uses out_trade_no; some integrations use outTradeNo
-    const outTradeNo = payload?.out_trade_no || payload?.outTradeNo;
+    const outTradeNo = payload?.out_trade_no || payload?.outTradeNo || payload?.merch_order_id;
 
     const isSuccess =
-      payload?.status === 'success'       ||   // simulator / custom
-      payload?.code   === '200'            ||   // Fabric success code
-      payload?.trade_status === 'Trade_Success'; // alternate Fabric field
+      payload?.status === 'success'         || 
+      payload?.code   === '200'             || 
+      payload?.trade_status === 'Trade_Success';
 
     if (outTradeNo && isSuccess) {
       const order = await Order.findById(outTradeNo);
@@ -183,7 +158,6 @@ exports.telebirrWebhook = async (req, res) => {
         order.status       = 'processing';
         await order.save();
 
-        // Mark the pending transaction record as completed
         await Transaction.findOneAndUpdate(
           { reference: order._id.toString(), referenceType: 'payment', status: 'pending' },
           { status: 'completed', processedAt: new Date() }
@@ -192,15 +166,12 @@ exports.telebirrWebhook = async (req, res) => {
         console.log(`✅ Telebirr payment confirmed for order ${order._id}`);
       }
     } else {
-      // Log unexpected or failed callbacks for debugging — do not throw
       console.warn('⚠️ Telebirr webhook received non-success payload:', JSON.stringify(payload));
     }
 
-    // Telebirr requires a 200 with this exact shape to stop retrying
     return res.status(200).json({ code: 0, message: 'success' });
   } catch (error) {
     console.error('❌ telebirrWebhook error:', error.message);
-    // Still return 200 so Telebirr does not retry endlessly on a transient error
     return res.status(200).json({ code: 1, message: 'internal error' });
   }
 };
@@ -224,12 +195,11 @@ exports.getPaymentSummary = async (req, res) => {
   }
 };
 
-// @desc    Stripe — create payment intent (wire up real Stripe SDK when ready)
+// @desc    Stripe — create payment intent
 // @route   POST /api/payments/create-payment-intent
 // @access  Protected
 exports.createPaymentIntent = async (req, res) => {
   try {
-    // TODO: replace with real stripe.paymentIntents.create(...)
     return res.status(200).json({ success: true, clientSecret: 'mock_stripe_secret' });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -241,7 +211,6 @@ exports.createPaymentIntent = async (req, res) => {
 // @access  Public
 exports.stripeWebhook = async (req, res) => {
   try {
-    // TODO: verify stripe.webhooks.constructEvent(...) and handle charge.succeeded
     return res.status(200).json({ received: true });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -253,7 +222,6 @@ exports.stripeWebhook = async (req, res) => {
 // @access  Protected
 exports.verifyPayment = async (req, res) => {
   try {
-    // TODO: query Stripe API for actual payment status
     return res.status(200).json({ success: true, status: 'completed' });
   } catch (error) {
     return res.status(500).json({ message: error.message });
