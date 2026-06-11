@@ -1,7 +1,7 @@
 // Get all users who have chatted with the current user
 router.get('/conversations', async (req, res) => {
   try {
-    const userId = req.user.id; // From your auth middleware
+    const userId = req.user.id; // From auth middleware
 
     // Find unique senders/receivers for the current user
     const conversations = await Message.aggregate([
@@ -22,7 +22,7 @@ router.get('/conversations', async (req, res) => {
       },
       {
         $lookup: {
-          from: 'users', // Your users collection
+          from: 'users', // users collection
           localField: '_id',
           foreignField: '_id',
           as: 'userDetails'

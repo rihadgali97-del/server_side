@@ -37,7 +37,7 @@ router.delete('/users/:id', deleteUser);
 router.get('/vendors', getVendors);
 router.put('/vendors/:id/verify', verifyVendor);
 
-// Fixed: Changed function name to verifyVendor to match the import above
+//  to varify vendors
 router.put('/vendors/:id/status', verifyVendor); 
 
 // Product management
