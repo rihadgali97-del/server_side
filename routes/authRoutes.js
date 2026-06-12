@@ -7,7 +7,8 @@ const {
   getProfile, 
   forgotPassword, 
   resetPassword,
-  verifyEmail
+  verifyEmail,
+  googleAuth
 } = require("../controller/authController");
 const { protect } = require("../middleware/authMiddleware");
 const { authLimiter } = require('../middleware/rateLimiter');
@@ -179,5 +180,29 @@ router.patch("/reset-password/:token", resetPassword);
  *         description: Email verified successfully
  */
 router.get("/verify-email/:token", verifyEmail);
+  
+/**
+ * @openapi
+ * /api/auth/google-login:
+ *   post:
+ *     summary: Authenticate or Register users using Google Cloud Identity Tokens
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idToken]
+ *             properties:
+ *               idToken: { type: string }
+ *               role: { type: string, enum: [customer, vendor] }
+ *               longitude: { type: number }
+ *               latitude: { type: number }
+ *     responses:
+ *       200:
+ *         description: Google Auth evaluation completely successful.
+ */
+router.post("/google-login", googleAuth);
 
 module.exports = router;
