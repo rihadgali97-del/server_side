@@ -6,9 +6,26 @@ const Vendor = require("../models/Vendor");
 const sendEmail = require("../services/emailService");
 const notificationService = require("../services/notificationService");
 
+const PASSWORD_RESET_TOKEN_TTL_MINUTES = 10;
+
+const sanitizeUser = (user) => {
+  const safeUser = user.toObject ? user.toObject() : { ...user };
+
+  delete safeUser.password;
+  delete safeUser.verificationToken;
+  delete safeUser.verificationTokenExpires;
+  delete safeUser.resetPasswordToken;
+  delete safeUser.resetPasswordExpires;
+
+  return {
+    ...safeUser,
+    id: safeUser._id,
+  };
+};
+
 class AuthService {
   async registerUser(userData, protocol, host) {
-    const { name, email, password, role } = userData;
+    const { name, email, password, role, longitude, latitude } = userData;
 
     const userExists = await User.findOne({ email });
     if (userExists) throw new Error("User already exists");
@@ -16,14 +33,23 @@ class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationToken = crypto.randomBytes(32).toString("hex");
 
-    const user = await User.create({
+    const newUserData = {
       name,
       email,
       password: hashedPassword,
       role: role || "customer",
       verificationToken,
       verificationTokenExpires: Date.now() + 24 * 60 * 60 * 1000,
-    });
+    };
+
+    if (longitude !== undefined && latitude !== undefined) {
+      newUserData.location = {
+        type: "Point",
+        coordinates: [parseFloat(longitude), parseFloat(latitude)],
+      };
+    }
+
+    const user = await User.create(newUserData);
 
     if (user.role === "vendor") {
       await Vendor.create({
@@ -43,7 +69,7 @@ class AuthService {
       console.error("Email failed to send during registration");
     }
 
-    return user;
+    return sanitizeUser(user);
   }
 
   async loginUser(email, password, io) {
@@ -63,7 +89,7 @@ class AuthService {
 
     await notificationService.sendSecurityAlert({ io, userEmail: user.email, userId: user._id });
 
-    return { token, user };
+    return { token, user: sanitizeUser(user) };
   }
 
   async verifyEmail(token, io) {
@@ -92,22 +118,32 @@ class AuthService {
 
   async forgotPassword(email, protocol, host) {
     const user = await User.findOne({ email });
-    if (!user) throw new Error("Email not found.");
+    if (!user) return;
 
     const resetToken = crypto.randomBytes(32).toString("hex");
     user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    user.resetPasswordExpires = Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000;
     await user.save();
 
-    const resetUrl = `${protocol}://${host}/api/auth/reset-password/${resetToken}`;
+    const clientUrl = process.env.CLIENT_URL || `${protocol}://${host}`;
+    const resetUrl = `${clientUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
     await sendEmail({
       email: user.email,
-      subject: "Password Reset Token",
-      message: `Reset your password here: ${resetUrl}`,
+      subject: "Reset your NextCart password",
+      message:
+        `Hi ${user.name},\n\n` +
+        `We received a request to reset your NextCart password.\n\n` +
+        `Use this secure link within ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes:\n\n` +
+        `${resetUrl}\n\n` +
+        `If you did not request this, you can safely ignore this email.`,
     });
   }
 
   async resetPassword(token, newPassword) {
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error("Password must be at least 8 characters long");
+    }
+
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
     const user = await User.findOne({
       resetPasswordToken: hashedToken,

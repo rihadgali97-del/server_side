@@ -52,7 +52,9 @@ exports.getProfile = async (req, res, next) => {
 exports.forgotPassword = async (req, res, next) => {
   try {
     await authService.forgotPassword(req.body.email, req.protocol, req.get("host"));
-    res.status(200).json({ message: "Token sent to email!" });
+    res.status(200).json({
+      message: "If an account exists for that email, a password reset link has been sent.",
+    });
   } catch (error) {
     next(error);
   }
