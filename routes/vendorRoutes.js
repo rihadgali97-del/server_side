@@ -24,6 +24,7 @@ const {
 
 const { protect } = require('../middleware/authMiddleware');
 const { requireVendor } = require('../middleware/roleMiddleware');
+const upload = require('../middleware/uploadMiddleware');
 
 // Global Middleware for Vendor Routes
 router.use(protect);
@@ -112,7 +113,7 @@ router.put('/profile', updateVendorProfile);
  *               category: { type: string, description: 'Category ID' }
  */
 router.get('/products', getVendorProducts);
-router.post('/products', addProduct);
+router.post('/products', upload.single('image'), addProduct);
 
 /**
  * @openapi

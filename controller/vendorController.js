@@ -64,7 +64,8 @@ exports.getVendorProducts = async (req, res) => {
 
 exports.addProduct = async (req, res) => {
     try {
-        const product = await vendorService.addProduct(req.user._id, req.body);
+        const filePath = req.file ? req.file.path : null;
+        const product = await vendorService.addProduct(req.user._id, req.body, filePath);
         res.status(201).json({ success: true, data: product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

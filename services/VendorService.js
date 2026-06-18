@@ -97,8 +97,12 @@ async getStats(vendorId) {
         return { products, total };
     }
 
-    async addProduct(vendorId, data) {
-        return await Product.create({ ...data, vendor: vendorId });
+    async addProduct(vendorUserId, data, filePath) {
+        const vendor = await Vendor.findOne({ user: vendorUserId });
+        if (!vendor) throw new Error('Vendor profile not found.');
+        const productData = { ...data, vendor: vendor._id };
+        if (filePath) productData.image = filePath;
+        return await Product.create(productData);
     }
 
     async updateProduct(productId, vendorId, data) {
