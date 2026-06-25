@@ -34,10 +34,11 @@ const baseGatewayAdapter = (name) => ({
   })
 });
 
+// Registering active payment modes
 registerGateway('cash',   baseGatewayAdapter('cash'));
 registerGateway('cbe',    baseGatewayAdapter('cbe'));
-registerGateway('stripe', baseGatewayAdapter('stripe'));
 
+// Telebirr Native Hub Integration
 registerGateway('telebirr', {
   charge: async ({ order }) => {
     try {
@@ -195,35 +196,24 @@ exports.getPaymentSummary = async (req, res) => {
   }
 };
 
-// @desc    Stripe — create payment intent
+// =========================================================================
+// 💡 MOCKED STUBS FOR STRIPE (Safeguards against UI breakdown)
+// =========================================================================
+
+// @desc    Stripe — Mocked payment intent creation
 // @route   POST /api/payments/create-payment-intent
-// @access  Protected
 exports.createPaymentIntent = async (req, res) => {
-  try {
-    return res.status(200).json({ success: true, clientSecret: 'mock_stripe_secret' });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
+  return res.status(200).json({ success: true, clientSecret: 'mock_stripe_disabled_by_user' });
 };
 
-// @desc    Stripe — webhook receiver
+// @desc    Stripe — Mocked webhook placeholder receiver
 // @route   POST /api/payments/webhook
-// @access  Public
 exports.stripeWebhook = async (req, res) => {
-  try {
-    return res.status(200).json({ received: true });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
+  return res.status(200).json({ received: true, note: 'Stripe functionality skipped' });
 };
 
-// @desc    Stripe — manual payment verification
+// @desc    Stripe — Mocked manual confirmation verification routing bypass
 // @route   PUT /api/payments/verify/:id
-// @access  Protected
 exports.verifyPayment = async (req, res) => {
-  try {
-    return res.status(200).json({ success: true, status: 'completed' });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
+  return res.status(200).json({ success: true, status: 'completed', message: 'Stripe simulation verified' });
 };
