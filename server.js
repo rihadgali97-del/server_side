@@ -1,9 +1,10 @@
-require("dotenv").config();
+require("dotenv").config(); // Must be the absolute first line
 const http = require('http');
 const { Server } = require('socket.io');
 const app = require("./app");
 const connectDB = require("./config/db");
 const { swaggerUi, specs } = require('./config/swagger');
+
 // 1. Database Connection
 connectDB();
 
@@ -12,7 +13,10 @@ const server = http.createServer(app);
 
 // 3. Initialize Socket.io
 const io = new Server(server, {
-  cors: { origin: "*" } 
+  cors: { 
+    origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : "*",
+    credentials: true
+  } 
 });
 
 // 4. Sockets Logic
@@ -30,12 +34,14 @@ io.on('connection', (socket) => {
 // 5. Background Jobs
 require('./jobs/inventoryAlertJob');
 
-// 6. Rate Limiting
+// 6. Rate Limiting Middlewares (Imported before application uses them)
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 app.use('/api', apiLimiter);
 app.use('/api/auth', authLimiter);
+
 // 6.5 API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
 // 7. Route Imports
 const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
@@ -52,12 +58,11 @@ const vendorRoutes = require("./routes/vendorRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const profileRoutes = require("./routes/profileRoutes");
-const notificationService = require('./services/notificationService');
 const searchRoutes = require('./routes/searchRoutes');
 const reportRoutes = require('./routes/reportRoutes');
-// Report Routes
-app.use('/api/reports', reportRoutes);
+
 // 8. Mount Routes
+app.use('/api/reports', reportRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/reviews", reviewRoutes);
@@ -75,12 +80,12 @@ app.use("/api/uploads", uploadRoutes);
 app.use("/api/profile", profileRoutes);
 app.use('/api/search', searchRoutes);
 
-// 9. Global Error Handling (Must be last)
+// 9. Global Error Handling (Must be last middleware)
 const errorHandler = require('./middleware/errorMiddleware');
 app.use(errorHandler);
 
 // 10. Start Server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 });
