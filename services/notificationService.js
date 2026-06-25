@@ -2,10 +2,9 @@ const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 const nodemailer = require('nodemailer');
 
-// Email Configuration
+// 🛠️ Gmail Unified Configuration
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
+  service: process.env.EMAIL_SERVICE || 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -17,6 +16,33 @@ const buildPagination = (page = 1, limit = 10) => {
   const pageSize = Number(limit) || 10;
   const skip = (currentPage - 1) * pageSize;
   return { currentPage, pageSize, skip };
+};
+
+/**
+ * EMAIL HTML ENGINE: Generates responsive production templates with action buttons
+ */
+const generateEmailTemplate = (title, message, buttonText, buttonUrl) => {
+  return `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+      <div style="padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; text-align: center;">
+        <h2 style="color: #0f172a; margin: 0; font-size: 24px;">NextCart Platforms</h2>
+      </div>
+      <div style="padding: 24px 0;">
+        <h3 style="color: #1e293b; margin-top: 0; font-size: 18px;">${title}</h3>
+        <p style="color: #475569; font-size: 15px; line-height: 1.6; margin-bottom: 28px;">${message}</p>
+        ${buttonText && buttonUrl ? `
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${buttonUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: 600; font-size: 15px; border-radius: 8px; display: inline-block; transition: background-color 0.2s;">
+              ${buttonText}
+            </a>
+          </div>
+        ` : ''}
+      </div>
+      <div style="padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center;">
+        <p style="color: #94a3b8; font-size: 12px; margin: 0;">This is an automated operational system message. Please do not reply directly to this mail.</p>
+      </div>
+    </div>
+  `;
 };
 
 /**
@@ -42,88 +68,88 @@ const createNotification = async ({ io, userId, title, message, type = 'info', m
 };
 
 /**
- * EMAIL WRAPPER: Prevents app crashes if Mailtrap/MailHog fails
+ * EMAIL WRAPPER: Prevents application crash loops if Gmail rejection flags trip
  */
 const attemptEmailSend = async (mailOptions) => {
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`📩 Email sent: ${info.messageId}`);
+    console.log(`📩 Email sent via Gmail: ${info.messageId}`);
     return info;
   } catch (error) {
-    console.error("❌ EMAIL SERVICE ERROR:", error.message);
-    console.log("Proceeding without sending email to:", mailOptions.to);
+    console.error("❌ GMAIL SERVICE ERROR:", error.message);
+    console.log("Proceeding gracefully without throwing process error to:", mailOptions.to);
     return null;
   }
 };
 
 /**
- * SPECIALIZED FUNCTIONS
+ * SPECIALIZED TRANSACTIONAL TEMPLATES
  */
 
 // 1. Low Stock Alert
 const sendLowStockAlert = async ({ io, vendorEmail, userId, product }) => {
   const title = "⚠️ Low Stock Alert";
-  const message = `Product ${product.name} is low on stock (${product.stock} remaining).`;
+  const message = `Product "${product.name}" is dropping below standard capacity bounds (${product.stock} items remaining). Update stock listings immediately to retain buyer traffic metrics.`;
   
   await createNotification({ io, userId, title, message, type: 'warning' });
 
   await attemptEmailSend({
-    from: '"NextCart Inventory" <inventory@nextcart.com>',
+    from: `"NextCart Inventory" <${process.env.EMAIL_USER}>`,
     to: vendorEmail,
     subject: title,
-    html: `<p>${message}</p><br/><a href="${process.env.FRONTEND_URL}/inventory">Update Stock</a>`
+    html: generateEmailTemplate(title, message, "Restock Inventory", `${process.env.FRONTEND_URL}/vendor/inventory`)
   });
 };
 
 // 2. Order Status Update (Notify Customer)
 const sendOrderStatusNotification = async ({ io, userEmail, userId, orderId, status }) => {
   const title = `📦 Order ${status.toUpperCase()}`;
-  const message = `Your order #${orderId.toString().slice(-6)} has been updated to: ${status}.`;
+  const message = `Great news! Your package milestone signature tracker has advanced. Your order #${orderId.toString().slice(-6)} has transitioned status to: ${status}.`;
   
   await createNotification({ io, userId, title, message, type: 'success' });
 
   await attemptEmailSend({
-    from: '"NextCart Orders" <orders@nextcart.com>',
+    from: `"NextCart Orders" <${process.env.EMAIL_USER}>`,
     to: userEmail,
     subject: title,
-    html: `<h3>Status Update</h3><p>${message}</p>`
+    html: generateEmailTemplate(title, message, "View Order Tracking", `${process.env.FRONTEND_URL}/orders/${orderId}`)
   });
 };
 
 // 3. New Order Received (Notify Vendor)
 const sendNewOrderNotification = async ({ io, vendorEmail, userId, orderId }) => {
   const title = "💰 New Order Received!";
-  const message = `You have a new order (#${orderId.toString().slice(-6)}). Check your vendor dashboard.`;
+  const message = `An item matching your inventory distribution pipeline was successfully purchased! Order target reference sequence: #${orderId.toString().slice(-6)}. Open the fulfillment workspace for routing details.`;
 
   await createNotification({ io, userId, title, message, type: 'success' });
 
   await attemptEmailSend({
-    from: '"NextCart Sales" <sales@nextcart.com>',
+    from: `"NextCart Sales" <${process.env.EMAIL_USER}>`,
     to: vendorEmail,
     subject: title,
-    html: `<h3>Cha-Ching!</h3><p>${message}</p>`
+    html: generateEmailTemplate(title, message, "Fulfill Order Now", `${process.env.FRONTEND_URL}/vendor/dashboard`)
   });
 };
 
 // 4. Security Alert (New Login)
 const sendSecurityAlert = async ({ io, userEmail, userId }) => {
   const title = "🔒 New Login Detected";
-  const message = `A new login was detected for your account at ${new Date().toLocaleString()}.`;
+  const message = `Security validation warning: An active session initialization protocol handshake occurred on your user registry at ${new Date().toLocaleString()}. If this wasn't you, reset credentials instantly.`;
 
   await createNotification({ io, userId, title, message, type: 'alert' });
 
   await attemptEmailSend({
-    from: '"NextCart Security" <security@nextcart.com>',
+    from: `"NextCart Security" <${process.env.EMAIL_USER}>`,
     to: userEmail,
     subject: title,
-    html: `<h3>Security Alert</h3><p>${message}</p>`
+    html: generateEmailTemplate(title, message, "Secure My Profile", `${process.env.FRONTEND_URL}/settings/security`)
   });
 };
 
-// 5. Vendor Rank Update (New)
+// 5. Vendor Rank Update
 const sendVendorRankNotification = async ({ io, vendorEmail, userId, newRank }) => {
   const title = "🌟 Level Up! Your Rank Updated";
-  const message = `Congratulations! Your vendor rank has been updated to: ${newRank}. Keep up the great work!`;
+  const message = `Congratulations! Based on your sustained trust score evaluations and delivery execution metrics, your core vendor baseline has officially scaled to: **${newRank}**.`;
 
   await createNotification({ 
     io, 
@@ -135,10 +161,10 @@ const sendVendorRankNotification = async ({ io, vendorEmail, userId, newRank }) 
   });
 
   await attemptEmailSend({
-    from: '"NextCart Partners" <partners@nextcart.com>',
+    from: `"NextCart Partners" <${process.env.EMAIL_USER}>`,
     to: vendorEmail,
     subject: title,
-    html: `<h3>Congratulations!</h3><p>${message}</p>`
+    html: generateEmailTemplate(title, message, "Review New Tier Benefits", `${process.env.FRONTEND_URL}/vendor/reputation`)
   });
 };
 

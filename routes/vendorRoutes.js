@@ -22,14 +22,13 @@ const {
   getVendorTransactions
 } = require('../controller/vendorController');
 
-const { protect } = require('../middleware/authMiddleware');
-const { requireVendor } = require('../middleware/roleMiddleware');
+// 🛠️ FIXED: Combined into a single declaration line
+const { protect, isApprovedVendor } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
 // Global Middleware for Vendor Routes
 router.use(protect);
-router.use(requireVendor());
-
+router.use(isApprovedVendor);
 /**
  * @openapi
  * /api/vendors/stats:
@@ -81,7 +80,15 @@ router.get('/stats', getVendorStats);
  *               businessAddress: { type: string }
  */
 router.get('/profile', getVendorProfile);
-router.put('/profile', updateVendorProfile);
+router.put(
+  '/profile',
+  upload.fields([
+    { name: 'faydaDoc', maxCount: 1 },
+    { name: 'taxDoc', maxCount: 1 },
+    { name: 'licenseDoc', maxCount: 1 }
+  ]),
+  updateVendorProfile
+);
 
 /**
  * @openapi

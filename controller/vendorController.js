@@ -2,7 +2,7 @@ const Vendor = require('../models/Vendor');
 const vendorService = require('../services/VendorService');
 const walletService = require('../services/WalletService');
 const orderService = require('../services/OrderService');
-
+const productService = require('../services/productService');
 const getPagination = (query) => {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
@@ -65,9 +65,19 @@ exports.getVendorProducts = async (req, res) => {
 exports.addProduct = async (req, res) => {
     try {
         const filePath = req.file ? req.file.path : null;
-        const product = await vendorService.addProduct(req.user._id, req.body, filePath);
+        const io = req.app.get("io");
+
+        // 🛠️ DIAGNOSTIC LOG: See exactly who is logged in vs the database structure
+        console.log("-----------------------------------------");
+        console.log("🕵️‍♂️ Authenticated User ID from Token:", req.user._id);
+        console.log("🕵️‍♂️ Full Authenticated User Object:", req.user);
+        console.log("-----------------------------------------");
+
+        const product = await productService.createProduct(req.user._id, req.body, filePath, io);
+        
         res.status(201).json({ success: true, data: product });
     } catch (error) {
+        console.error("❌ CRASH IN ADD_PRODUCT:", error); 
         res.status(500).json({ success: false, message: error.message });
     }
 };

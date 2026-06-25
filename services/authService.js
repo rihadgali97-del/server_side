@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const Vendor = require("../models/Vendor");
-const sendEmail = require("../services/emailService");
+const sendEmail = require("../services/emailService"); 
 const notificationService = require("../services/notificationService");
 
 const PASSWORD_RESET_TOKEN_TTL_MINUTES = 10;
@@ -25,7 +25,7 @@ const sanitizeUser = (user) => {
 
 class AuthService {
   async registerUser(userData, protocol, host) {
-    const { name, email, password, role, longitude, latitude } = userData;
+    const { name, email, password, role, longitude, latitude, faydaNumber, licenseNumber } = userData;
 
     const userExists = await User.findOne({ email });
     if (userExists) throw new Error("User already exists");
@@ -55,6 +55,8 @@ class AuthService {
       await Vendor.create({
         user: user._id,
         businessName: `${user.name}'s Shop`,
+        faydaNumber: faydaNumber || undefined,
+        licenseNumber: licenseNumber || undefined,
         isVerified: false,
       });
     }
@@ -65,7 +67,6 @@ class AuthService {
     try {
       await sendEmail({ email: user.email, subject: "Verify your Account", message });
     } catch (err) {
-      // We don't throw here so the user is still registered even if email fails
       console.error("Email failed to send during registration");
     }
 
@@ -118,15 +119,18 @@ class AuthService {
 
   async forgotPassword(email, protocol, host) {
     const user = await User.findOne({ email });
-    if (!user) return;
+    if (!user) return; // Silent return prevents account enumeration discovery
 
     const resetToken = crypto.randomBytes(32).toString("hex");
     user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
     user.resetPasswordExpires = Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000;
     await user.save();
 
+    // Cleanly manage matching application URL patterns
     const clientUrl = process.env.CLIENT_URL || `${protocol}://${host}`;
     const resetUrl = `${clientUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
+    
+    // 🔗 Passing 'resetUrl' down now triggers the modern UI red action button inside Gmail!
     await sendEmail({
       email: user.email,
       subject: "Reset your NextCart password",
@@ -136,6 +140,7 @@ class AuthService {
         `Use this secure link within ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes:\n\n` +
         `${resetUrl}\n\n` +
         `If you did not request this, you can safely ignore this email.`,
+      resetUrl: resetUrl 
     });
   }
 

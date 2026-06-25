@@ -1,5 +1,6 @@
 const authService = require("../services/authService");
 const User = require("../models/User");
+const Vendor = require("../models/Vendor"); // 🛠️ NEW: Imported Vendor model for OAuth registration
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -75,7 +76,8 @@ exports.resetPassword = async (req, res, next) => {
  * and passes matching structural payloads out downstream.
  */
 exports.googleAuth = async (req, res, next) => {
-  const { idToken, role, longitude, latitude } = req.body;
+  // 🛠️ NEW: Extract faydaNumber and licenseNumber for vendor OAuth signups
+  const { idToken, role, longitude, latitude, faydaNumber, licenseNumber } = req.body;
 
   if (!idToken) {
     return res.status(400).json({ success: false, message: "Google verification ID Token is missing." });
@@ -122,6 +124,18 @@ exports.googleAuth = async (req, res, next) => {
 
       user = new User(newUserData);
       await user.save();
+
+      // 🛠️ NEW: Link Vendor profile generation to Google OAuth flow
+      if (targetRole === 'vendor') {
+        await Vendor.create({
+          user: user._id,
+          businessName: `${user.name}'s Shop`,
+          faydaNumber: faydaNumber || undefined,
+          licenseNumber: licenseNumber || undefined,
+          isVerified: false
+        });
+      }
+
     } else {
       // LOGIN / LINK FLOW: Bind profile identifiers to existing matching documents safely
       if (!user.googleId) {

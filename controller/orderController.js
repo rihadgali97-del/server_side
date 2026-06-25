@@ -5,7 +5,7 @@ const trustService = require("../services/TrustService");
 const User = require("../models/User");
 const Order = require("../models/Order");
 
-// @desc    Create new order (Kept your original logic)
+//  Create new order
 exports.createOrder = async (req, res) => {
     try {
         const userId = req.user._id || req.user.id;
@@ -41,7 +41,7 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-// @desc    Update order status and trigger Trust Engine
+//   Update order status and trigger Trust Engine
 exports.updateOrderStatus = async (req, res) => {
     try {
         const { status } = req.body;
@@ -79,7 +79,7 @@ exports.updateOrderStatus = async (req, res) => {
             await trustService.updateTrustScore(vendorId);
         }
 
-        // --- Notification Logic (Unchanged) ---
+        // --- Notification Logic ---
         try {
             const io = req.app.get("io");
             const customer = await User.findById(order.user);
@@ -96,7 +96,7 @@ exports.updateOrderStatus = async (req, res) => {
     }
 };
 
-// @desc    Get all orders for the logged-in user
+//    Get all orders for the logged-in user
 exports.getOrders = async (req, res) => {
     try {
         const userId = req.user._id || req.user.id;
@@ -107,7 +107,7 @@ exports.getOrders = async (req, res) => {
     }
 };
 
-// @desc    Get single order by ID
+//     Get single order by ID
 exports.getOrderById = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id)

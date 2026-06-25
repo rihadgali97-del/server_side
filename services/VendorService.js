@@ -78,11 +78,43 @@ async getStats(vendorId) {
     };
 }
 
-    async updateProfile(vendorInstance, updateData) {
-        const fields = ['businessName', 'description', 'businessAddress', 'contactEmail', 'contactPhone', 'logo'];
+async updateProfile(vendorInstance, updateData, files) {
+        // 1. Added taxId, faydaNumber, and licenseNumber to the allowed fields array
+        const fields = [
+            'businessName', 'description', 'businessAddress', 'contactEmail', 
+            'contactPhone', 'logo', 'taxId', 'faydaNumber', 'licenseNumber'
+        ];
+        
         fields.forEach(field => { 
-            if (updateData[field]) vendorInstance[field] = updateData[field]; 
+            if (updateData[field] !== undefined) vendorInstance[field] = updateData[field]; 
         });
+
+        // 2. Process newly uploaded verification documents
+        if (files) {
+            const newDocs = [];
+            
+            if (files.faydaDoc && files.faydaDoc[0]) {
+                newDocs.push({ type: 'fayda_card', fileUrl: files.faydaDoc[0].path });
+            }
+            if (files.taxDoc && files.taxDoc[0]) {
+                newDocs.push({ type: 'tin_certificate', fileUrl: files.taxDoc[0].path });
+            }
+            if (files.licenseDoc && files.licenseDoc[0]) {
+                newDocs.push({ type: 'trade_license', fileUrl: files.licenseDoc[0].path });
+            }
+
+            if (newDocs.length > 0) {
+                // Ensure the documents array exists, then push new documents
+                if (!vendorInstance.verification.documents) {
+                    vendorInstance.verification.documents = [];
+                }
+                vendorInstance.verification.documents.push(...newDocs);
+                
+                // Automatically set status to pending review when new docs are uploaded
+                vendorInstance.verification.status = 'pending';
+            }
+        }
+
         return await vendorInstance.save();
     }
 
