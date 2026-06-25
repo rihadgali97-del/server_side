@@ -5,7 +5,7 @@ const User = require("../models/User");
 const Vendor = require("../models/Vendor");
 const Wallet = require("../models/Wallet"); // Still needed for the Model reference
 const Cart = require("../models/Cart");
-const walletService = require("./WalletService"); // New Integration
+const walletService = require("./walletService"); 
 
 class OrderService {
     /**
