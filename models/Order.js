@@ -16,7 +16,7 @@ const orderSchema = new mongoose.Schema(
         },
         name: { type: String, required: true },
         quantity: { type: Number, required: true },
-        price: { type: Number, required: true }, // Original price
+        price: { type: Number, required: true }, 
         image: { type: String },
         vendor: {
           type: mongoose.Schema.Types.ObjectId,
@@ -45,5 +45,15 @@ const orderSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// --- INDEXES FOR PERFORMANCE OPTIMIZATION ---
+
+// 1. Fast lookup for customer order history
+orderSchema.index({ user: 1 });
+
+// 2. Fast lookup for multi-vendor dashboards/sales data
+orderSchema.index({ "orderItems.vendor": 1 });
+
+// --------------------------------------------
 
 module.exports = mongoose.model("Order", orderSchema);
