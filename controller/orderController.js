@@ -1,7 +1,7 @@
 const orderService = require("../services/orderService");
 const paymentFactory = require("../services/payment/PaymentFactory");
 const notificationService = require("../services/notificationService");
-const trustService = require("../services/TrustService"); 
+const trustService = require("../services/trustService"); 
 const User = require("../models/User");
 const Order = require("../models/Order");
 
