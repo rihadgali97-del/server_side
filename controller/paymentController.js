@@ -1,7 +1,9 @@
+const mongoose    = require('mongoose'); // Required for atomic session-driven checkouts
 const Order       = require('../models/Order');
 const Transaction = require('../models/Transaction');
 const Wallet      = require('../models/Wallet');
 const telebirrService = require('../services/payment/telebirrService');
+const WalletService   = require('../services/WalletService'); // Interacts with your internal balance ledger tier
 
 const DEFAULT_CURRENCY = 'ETB';
 const gatewayRegistry  = new Map();
@@ -42,6 +44,21 @@ registerGateway('cbe',    baseGatewayAdapter('cbe'));
 registerGateway('telebirr', {
   charge: async ({ order }) => {
     try {
+      // -----------------------------------------------------------------------
+      // 🔌 OPTION A: LOCAL DEVELOPMENT MOCK (Active by default for sandbox testing)
+      // -----------------------------------------------------------------------
+      console.log(`⚠️ Telebirr Mock Bypass Active: Simulating gateway link for Tracking Reference #${order._id}`);
+      return {
+        success:       true,
+        status:        'pending',
+        transactionId: order._id.toString(),
+        metadata:      { paymentUrl: `http://localhost:3000/mock-checkout?orderId=${order._id}&amt=${order.totalPrice}` }
+      };
+
+      // -----------------------------------------------------------------------
+      // 🚀 OPTION B: LIVE PRODUCTION / SANDBOX HUB (Uncomment when connection issues clear up)
+      // -----------------------------------------------------------------------
+      /*
       const response = await telebirrService.createTelebirrOrder(order);
       return {
         success:       true,
@@ -49,6 +66,7 @@ registerGateway('telebirr', {
         transactionId: order._id.toString(),
         metadata:      { paymentUrl: response.url }
       };
+      */
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -165,6 +183,26 @@ exports.telebirrWebhook = async (req, res) => {
         );
 
         console.log(`✅ Telebirr payment confirmed for order ${order._id}`);
+      } else if (outTradeNo.startsWith('DEP-')) {
+        // Fallback processing node for internal standalone user deposits
+        const pendingTx = await Transaction.findOne({
+          reference: outTradeNo,
+          referenceType: 'deposit',
+          status: 'pending'
+        });
+
+        if (pendingTx) {
+          pendingTx.status = 'completed';
+          await pendingTx.save();
+
+          await WalletService.creditAvailableFunds(
+            pendingTx.wallet,
+            pendingTx.amount,
+            pendingTx.currency,
+            outTradeNo
+          );
+          console.log(`✅ Telebirr direct wallet load processed successfully for tracking: ${outTradeNo}`);
+        }
       }
     } else {
       console.warn('⚠️ Telebirr webhook received non-success payload:', JSON.stringify(payload));
@@ -174,6 +212,165 @@ exports.telebirrWebhook = async (req, res) => {
   } catch (error) {
     console.error('❌ telebirrWebhook error:', error.message);
     return res.status(200).json({ code: 1, message: 'internal error' });
+  }
+};
+
+// @desc    Telebirr — Initiate standalone wallet balance load
+// @route   POST /api/payments/initiate-wallet-deposit
+// @access  Protected
+exports.initiateWalletDeposit = async (req, res) => {
+  try {
+    const { amount } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'A valid deposit amount is required' });
+    }
+
+    const wallet = await resolveWallet(req.user?._id);
+    const depositTrackingId = `DEP-${wallet._id}-${Date.now()}`;
+
+    const ephemeralOrderPayload = {
+      _id: depositTrackingId,
+      totalPrice: Number(amount)
+    };
+
+    const provider = getGateway('telebirr');
+    const paymentResult = await provider.charge({ order: ephemeralOrderPayload });
+
+    if (!paymentResult.success) {
+      return res.status(400).json({ success: false, message: paymentResult.error || 'Gateway interaction failed' });
+    }
+
+    await Transaction.create({
+      wallet: wallet._id,
+      type: 'deposit',
+      amount: Number(amount),
+      currency: DEFAULT_CURRENCY,
+      description: `Pending wallet deposit top-up validation request`,
+      reference: depositTrackingId,
+      referenceType: 'deposit',
+      status: 'pending',
+      metadata: { provider: 'telebirr', ...paymentResult.metadata }
+    });
+
+    return res.status(200).json({
+      success: true,
+      url: paymentResult.metadata.paymentUrl
+    });
+  } catch (error) {
+    console.error('❌ initiateWalletDeposit error:', error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Checkout — Pay for an order using internal wallet available balance
+// @route   POST /api/payments/pay-with-wallet
+// @access  Protected
+exports.payWithWallet = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { orderId } = req.body;
+    const userId = req.user?._id;
+
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'orderId is required' });
+    }
+
+    const order = await Order.findById(orderId).session(session);
+    if (!order) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.user.toString() !== userId.toString()) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({ success: false, message: 'Unauthorized to settle this order' });
+    }
+
+    if (order.isPaid) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'This order has already been settled' });
+    }
+
+    const orderAmount = order.totalPrice || 0;
+    const currency = order.currency || DEFAULT_CURRENCY;
+
+    // Fetch user wallet document inside transactional boundary session
+    const buyerWallet = await WalletService.getOrCreateWallet(userId, session, false);
+    
+    if (!buyerWallet.isActive || buyerWallet.isFrozen) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Your wallet is currently inactive or frozen' });
+    }
+
+    const currentAvailableBalance = buyerWallet.balances.get(currency) || 0;
+    if (currentAvailableBalance < orderAmount) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ 
+        success: false, 
+        message: `Insufficient wallet balance. Required: ${orderAmount} ${currency}, Available: ${currentAvailableBalance} ${currency}` 
+      });
+    }
+
+    // Deduct total amount from balance map
+    buyerWallet.balances.set(currency, currentAvailableBalance - orderAmount);
+    await buyerWallet.save({ session });
+
+    // Generate immediate ledger debit entry row
+    const checkoutTxRef = `WLT-PAY-${order._id}-${Date.now()}`;
+    await Transaction.create([{
+      wallet: buyerWallet._id,
+      amount: orderAmount,
+      currency: currency,
+      type: 'debit',
+      description: `Internal wallet checkout settlement for Order #${order._id}`,
+      reference: order._id.toString(),
+      referenceType: 'order',
+      status: 'completed'
+    }], { session });
+
+    // Route money into vendor pending escrow buffer space allocation pools
+    if (order.vendor) {
+      await WalletService.addPendingFunds(order.vendor, orderAmount, currency, session, true);
+    } else if (order.items && order.items.length > 0) {
+      for (const item of order.items) {
+        const targetVendor = item.vendor || item.vendorId;
+        if (targetVendor) {
+          const itemShare = (item.price * item.quantity);
+          await WalletService.addPendingFunds(targetVendor, itemShare, currency, session, true);
+        }
+      }
+    }
+
+    // Finalize order status indicators
+    order.isPaid = true;
+    order.paidAt = new Date();
+    order.paymentMethod = 'wallet';
+    order.status = 'processing';
+    await order.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Order paid successfully using internal wallet balance',
+      transactionReference: checkoutTxRef,
+      remainingBalance: buyerWallet.balances.get(currency)
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('❌ payWithWallet Critical Execution Exception:', error.message);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

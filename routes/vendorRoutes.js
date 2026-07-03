@@ -194,7 +194,7 @@ router.put('/orders/:id/status', updateOrderStatus);
  *     security:
  *       - bearerAuth: []
  */
-router.get('/wallet', getVendorWallet);
+router.get('/wallet', protect, getVendorWallet);
 
 /**
  * @openapi

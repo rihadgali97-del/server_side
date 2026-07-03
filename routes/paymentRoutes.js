@@ -10,6 +10,8 @@ const requiredHandlers = [
   'createPaymentIntent',
   'verifyPayment',
   'initiateTelebirrPayment',
+  'initiateWalletDeposit', // 🆕 Added to safeguard wallet deposit initiation
+  'payWithWallet',          // 🆕 Added to safeguard wallet balance checkout
   'getPaymentSummary'
 ];
 
@@ -29,6 +31,8 @@ router.post('/telebirr-webhook',  paymentController.telebirrWebhook);
 router.post('/create-payment-intent', protect, paymentController.createPaymentIntent);
 router.put( '/verify/:id',            protect, paymentController.verifyPayment);
 router.post('/initiate-telebirr',     protect, paymentController.initiateTelebirrPayment);
+router.post('/initiate-wallet-deposit', protect, paymentController.initiateWalletDeposit); // 🆕 Standalone Top-up URL
+router.post('/pay-with-wallet',       protect, paymentController.payWithWallet);          // 🆕 Internal Balance Checkout
 router.get( '/:id/summary',           protect, paymentController.getPaymentSummary);
 
 module.exports = router;
