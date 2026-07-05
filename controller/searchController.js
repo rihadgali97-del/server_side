@@ -155,6 +155,11 @@ const trustWeightedSearch = async (req, res) => {
 
     const totalPages = Math.ceil(total / limit);
 
+    // search results must always return fresh data
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+
     res.json({
       success: true,
       proximity: lng && lat ? { enabled:true, lng, lat, radiusKm } : { enabled:false },

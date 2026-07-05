@@ -1,8 +1,12 @@
 const Vendor = require('../models/Vendor');
+const Order = require('../models/Order');
+const Product = require('../models/Product');
+const Transaction = require('../models/Transaction');
 const vendorService = require('../services/VendorService');
 const walletService = require('../services/WalletService');
 const orderService = require('../services/OrderService');
 const productService = require('../services/productService');
+
 const getPagination = (query) => {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
@@ -27,7 +31,6 @@ exports.getVendorProfile = async (req, res) => {
 
 exports.updateVendorProfile = async (req, res) => {
     try {
-        // Intercept profile changes to format incoming location updates into GeoJSON Point objects
         if (req.body.longitude !== undefined && req.body.latitude !== undefined) {
             req.body.location = {
                 type: 'Point',
@@ -52,10 +55,10 @@ exports.getVendorProducts = async (req, res) => {
     try {
         const { page, limit, skip } = getPagination(req.query);
         const result = await vendorService.getProducts(req.user._id, { skip, pageSize: limit });
-        res.json({ 
-            success: true, 
-            data: result.products, 
-            pagination: { page, limit, total: result.total, pages: Math.ceil(result.total / limit) } 
+        res.json({
+            success: true,
+            data: result.products,
+            pagination: { page, limit, total: result.total, pages: Math.ceil(result.total / limit) }
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -67,17 +70,11 @@ exports.addProduct = async (req, res) => {
         const filePath = req.file ? req.file.path : null;
         const io = req.app.get("io");
 
-        // 🛠️ DIAGNOSTIC LOG: See exactly who is logged in vs the database structure
-        console.log("-----------------------------------------");
-        console.log("🕵️‍♂️ Authenticated User ID from Token:", req.user._id);
-        console.log("🕵️‍♂️ Full Authenticated User Object:", req.user);
-        console.log("-----------------------------------------");
-
         const product = await productService.createProduct(req.user._id, req.body, filePath, io);
-        
+
         res.status(201).json({ success: true, data: product });
     } catch (error) {
-        console.error("❌ CRASH IN ADD_PRODUCT:", error); 
+        console.error("❌ CRASH IN ADD_PRODUCT:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -105,10 +102,10 @@ exports.getVendorOrders = async (req, res) => {
     try {
         const { page, limit, skip } = getPagination(req.query);
         const result = await vendorService.getOrders(req.user._id, { skip, pageSize: limit });
-        res.json({ 
-            success: true, 
-            data: result.orders, 
-            pagination: { page, limit, total: result.total, pages: Math.ceil(result.total / limit) } 
+        res.json({
+            success: true,
+            data: result.orders,
+            pagination: { page, limit, total: result.total, pages: Math.ceil(result.total / limit) }
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -125,6 +122,8 @@ exports.updateOrderStatus = async (req, res) => {
                 .filter(i => i.vendor.toString() === req.user._id.toString())
                 .reduce((acc, item) => acc + item.vendorEarnings, 0);
 
+            // isVendor intentionally omitted (defaults false) — wallet is keyed by `user`,
+            // matching getVendorWallet below. Keep these two in sync if that ever changes.
             await walletService.releasePendingFunds(req.user._id, vendorEarnings, 'ETB', order._id, "Order Payout");
         }
         res.json({ success: true, data: order });
@@ -134,21 +133,51 @@ exports.updateOrderStatus = async (req, res) => {
 };
 
 // Finance (Wallet)
+// FIXED: previously sent the raw Mongoose doc (wallet.balances is a Map, not wallet.balance),
+// and never sent `transactions` at all — frontend was reading fields that never existed.
 exports.getVendorWallet = async (req, res) => {
     try {
         const wallet = await walletService.getOrCreateWallet(req.user._id);
-        res.json({ success: true, wallet });
+
+        const transactions = await Transaction.find({ wallet: wallet._id }).sort({ createdAt: -1 });
+
+        const balance = wallet.balances.get('ETB') || 0;
+        const pending = wallet.pending.get('ETB') || 0;
+
+        const withdrawn = transactions
+            .filter(t => t.type === 'withdrawal' && t.status === 'completed')
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        // NOTE: WalletService only ever creates types 'release' and 'deposit' — never 'credit'.
+        const grossVolume = transactions
+            .filter(t => (t.type === 'release' || t.type === 'deposit') && t.status === 'completed')
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        res.status(200).json({
+            success: true,
+            wallet: {
+                balance,
+                pending,
+                withdrawn,
+                grossVolume,
+                updatedAt: wallet.updatedAt
+            },
+            transactions
+        });
     } catch (error) {
+        console.error('❌ Vendor Wallet Error:', error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
+// REVERTED to use vendorService.getTransactions — it already does exactly this correctly,
+// no need to duplicate the query here.
 exports.getVendorTransactions = async (req, res) => {
     try {
         const { page, limit, skip } = getPagination(req.query);
         const wallet = await walletService.getOrCreateWallet(req.user._id);
         const { transactions, total } = await vendorService.getTransactions(wallet._id, { skip, pageSize: limit });
-        res.json({ success: true, data: transactions, pagination: { page, limit, total } });
+        res.json({ success: true, data: transactions, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -177,7 +206,6 @@ exports.getVendorAnalytics = async (req, res) => {
     try {
         const vendorId = req.user._id;
 
-        // 1. Sales Trend (Last 7 Days)
         const salesTrend = await Order.aggregate([
             { $unwind: "$orderItems" },
             { $match: { "orderItems.vendor": vendorId, isPaid: true } },
@@ -192,7 +220,6 @@ exports.getVendorAnalytics = async (req, res) => {
             { $limit: 7 }
         ]);
 
-        // 2. Category Distribution (Products per category)
         const categoryData = await Product.aggregate([
             { $match: { vendor: vendorId } },
             {

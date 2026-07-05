@@ -1,3 +1,4 @@
+const Vendor = require('../models/Vendor'); 
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const Transaction = require('../models/Transaction');
@@ -41,58 +42,58 @@ class VendorService {
         return { updated: false, rank: currentRank };
     }
 
-async getStats(vendorId) {
-    // 1. Keep your existing aggregation exactly as it is
-    const stats = await Order.aggregate([
-        { $unwind: "$orderItems" },
-        { $match: { "orderItems.vendor": new mongoose.Types.ObjectId(vendorId) } },
-        {
-            $group: {
-                _id: vendorId,
-                totalOrders: { $sum: 1 },
-                totalItemsSold: { $sum: "$orderItems.quantity" },
-                totalRevenue: { $sum: { $multiply: ["$orderItems.price", "$orderItems.quantity"] } },
-                netEarnings: { $sum: "$orderItems.vendorEarnings" },
-                pendingEarnings: {
-                    $sum: { $cond: [{ $ne: ["$status", "delivered"] }, "$orderItems.vendorEarnings", 0] }
+    async getStats(vendorId) {
+        // 1. Keep your existing aggregation exactly as it is
+        const stats = await Order.aggregate([
+            { $unwind: "$orderItems" },
+            { $match: { "orderItems.vendor": new mongoose.Types.ObjectId(vendorId) } },
+            {
+                $group: {
+                    _id: vendorId,
+                    totalOrders: { $sum: 1 },
+                    totalItemsSold: { $sum: "$orderItems.quantity" },
+                    totalRevenue: { $sum: { $multiply: ["$orderItems.price", "$orderItems.quantity"] } },
+                    netEarnings: { $sum: "$orderItems.vendorEarnings" },
+                    pendingEarnings: {
+                        $sum: { $cond: [{ $ne: ["$status", "delivered"] }, "$orderItems.vendorEarnings", 0] }
+                    }
                 }
             }
-        }
-    ]);
+        ]);
 
-    // 2. Add this specific line to count your products
-    const totalProducts = await Product.countDocuments({ vendor: vendorId });
+        // 2. Add this specific line to count your products
+        const totalProducts = await Product.countDocuments({ vendor: vendorId });
 
-    // 3. Merge the product count into  existing return object
-    const result = stats[0] || { 
-        totalOrders: 0, 
-        totalItemsSold: 0, 
-        totalRevenue: 0, 
-        netEarnings: 0, 
-        pendingEarnings: 0 
-    };
+        // 3. Merge the product count into existing return object
+        const result = stats[0] || {
+            totalOrders: 0,
+            totalItemsSold: 0,
+            totalRevenue: 0,
+            netEarnings: 0,
+            pendingEarnings: 0
+        };
 
-    return {
-        ...result,
-        totalProducts 
-    };
-}
+        return {
+            ...result,
+            totalProducts
+        };
+    }
 
-async updateProfile(vendorInstance, updateData, files) {
+    async updateProfile(vendorInstance, updateData, files) {
         // 1. Added taxId, faydaNumber, and licenseNumber to the allowed fields array
         const fields = [
-            'businessName', 'description', 'businessAddress', 'contactEmail', 
+            'businessName', 'description', 'businessAddress', 'contactEmail',
             'contactPhone', 'logo', 'taxId', 'faydaNumber', 'licenseNumber'
         ];
-        
-        fields.forEach(field => { 
-            if (updateData[field] !== undefined) vendorInstance[field] = updateData[field]; 
+
+        fields.forEach(field => {
+            if (updateData[field] !== undefined) vendorInstance[field] = updateData[field];
         });
 
         // 2. Process newly uploaded verification documents
         if (files) {
             const newDocs = [];
-            
+
             if (files.faydaDoc && files.faydaDoc[0]) {
                 newDocs.push({ type: 'fayda_card', fileUrl: files.faydaDoc[0].path });
             }
@@ -109,7 +110,7 @@ async updateProfile(vendorInstance, updateData, files) {
                     vendorInstance.verification.documents = [];
                 }
                 vendorInstance.verification.documents.push(...newDocs);
-                
+
                 // Automatically set status to pending review when new docs are uploaded
                 vendorInstance.verification.status = 'pending';
             }
@@ -130,7 +131,7 @@ async updateProfile(vendorInstance, updateData, files) {
     }
 
     async addProduct(vendorUserId, data, filePath) {
-        const vendor = await Vendor.findOne({ user: vendorUserId });
+        const vendor = await Vendor.findOne({ user: vendorUserId }); // works now that Vendor is imported
         if (!vendor) throw new Error('Vendor profile not found.');
         const productData = { ...data, vendor: vendor._id };
         if (filePath) productData.image = filePath;
@@ -139,8 +140,8 @@ async updateProfile(vendorInstance, updateData, files) {
 
     async updateProduct(productId, vendorId, data) {
         const product = await Product.findOneAndUpdate(
-            { _id: productId, vendor: vendorId }, 
-            data, 
+            { _id: productId, vendor: vendorId },
+            data,
             { new: true }
         );
         if (!product) throw new Error('Product not found or unauthorized');
@@ -157,9 +158,9 @@ async updateProfile(vendorInstance, updateData, files) {
             .skip(skip)
             .limit(pageSize)
             .sort({ createdAt: -1 });
-        
+
         const total = await Order.countDocuments({ 'orderItems.vendor': vendorId });
-        
+
         const ordersWithVendorTotals = orders.map(order => ({
             ...order.toObject(),
             vendorItems: order.orderItems.filter(i => i.vendor.toString() === vendorId.toString()),
