@@ -6,10 +6,9 @@ const mongoose = require('mongoose');
 const notificationService = require('./notificationService');
 
 class VendorService {
-    /**
-     * Updates Vendor Rank based on performance stats and notifies the user.
-     * This uses the specialized notification function created in the notificationService.
-     */
+    
+     //Updates Vendor Rank based on performance stats and notifies the user.
+     //This uses the specialized notification function created in the notificationService.
     async updateVendorRank(vendorInstance, io) {
         const stats = await this.getStats(vendorInstance._id);
         const currentRank = vendorInstance.rank || 'Bronze';
@@ -131,7 +130,7 @@ class VendorService {
     }
 
     async addProduct(vendorUserId, data, filePath) {
-        const vendor = await Vendor.findOne({ user: vendorUserId }); // works now that Vendor is imported
+        const vendor = await Vendor.findOne({ user: vendorUserId });
         if (!vendor) throw new Error('Vendor profile not found.');
         const productData = { ...data, vendor: vendor._id };
         if (filePath) productData.image = filePath;

@@ -3,7 +3,8 @@ const Order       = require('../models/Order');
 const Transaction = require('../models/Transaction');
 const Wallet      = require('../models/Wallet');
 const telebirrService = require('../services/payment/telebirrService');
-const WalletService   = require('../services/WalletService'); // Interacts with your internal balance ledger tier
+const WalletService   = require('../services/WalletService'); // Interacts with internal balance ledger tier
+const notificationService = require('../services/notificationService'); 
 
 const DEFAULT_CURRENCY = 'ETB';
 const gatewayRegistry  = new Map();
@@ -168,7 +169,8 @@ exports.telebirrWebhook = async (req, res) => {
       payload?.trade_status === 'Trade_Success';
 
     if (outTradeNo && isSuccess) {
-      const order = await Order.findById(outTradeNo);
+      // 🛠️ heavily populate core user relational data for the dynamic email wrappers
+      const order = await Order.findById(outTradeNo).populate('user');
 
       if (order && !order.isPaid) {
         order.isPaid       = true;
@@ -183,6 +185,24 @@ exports.telebirrWebhook = async (req, res) => {
         );
 
         console.log(`✅ Telebirr payment confirmed for order ${order._id}`);
+
+        // ── DISPATCH TRANSACTION DISPATCH HANDSHAKE (NON-CRASHING) ──
+        try {
+          const io = req.app.get('io');
+          // Fallback array mapping to guarantee notification architecture compatibility
+          order.orderItems = order.orderItems || order.items || [];
+          
+          await notificationService.sendPaymentSuccessNotification({
+            io,
+            order,
+            user: order.user,
+            amount: order.totalPrice || 0,
+            currency: order.currency || DEFAULT_CURRENCY
+          });
+        } catch (notifError) {
+          console.error('⚠️ Webhook transaction notification bypass caught:', notifError.message);
+        }
+
       } else if (outTradeNo.startsWith('DEP-')) {
         // Fallback processing node for internal standalone user deposits
         const pendingTx = await Transaction.findOne({
@@ -359,6 +379,25 @@ exports.payWithWallet = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    // ── DISPATCH WALLET TRANSACTION DISPATCH HANDSHAKE (NON-CRASHING POST-COMMIT) ──
+    try {
+      const io = req.app.get('io');
+      const fullyPopulatedOrder = await Order.findById(orderId).populate('user');
+      if (fullyPopulatedOrder && fullyPopulatedOrder.user) {
+        fullyPopulatedOrder.orderItems = fullyPopulatedOrder.orderItems || fullyPopulatedOrder.items || [];
+        
+        await notificationService.sendPaymentSuccessNotification({
+          io,
+          order: fullyPopulatedOrder,
+          user: fullyPopulatedOrder.user,
+          amount: orderAmount,
+          currency: currency
+        });
+      }
+    } catch (notifError) {
+      console.error('⚠️ Wallet transactional checkout notification bypass caught:', notifError.message);
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Order paid successfully using internal wallet balance',
@@ -374,8 +413,8 @@ exports.payWithWallet = async (req, res) => {
   }
 };
 
-// @desc    General — get order payment summary + transaction history
-// @route   GET /api/payments/:id/summary
+//     General — get order payment summary + transaction history
+//    GET /api/payments/:id/summary
 // @access  Protected
 exports.getPaymentSummary = async (req, res) => {
   try {
@@ -409,7 +448,6 @@ exports.stripeWebhook = async (req, res) => {
   return res.status(200).json({ received: true, note: 'Stripe functionality skipped' });
 };
 
-// @desc    Stripe — Mocked manual confirmation verification routing bypass
 // @route   PUT /api/payments/verify/:id
 exports.verifyPayment = async (req, res) => {
   return res.status(200).json({ success: true, status: 'completed', message: 'Stripe simulation verified' });

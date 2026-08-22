@@ -1,12 +1,9 @@
-const StripeGateway = require('./StripeGateway');
 const TelebirrGateway = require('./TelebirrGateway');
 const CBEGateway = require('./CBEGateway'); // Placeholder for now
 
 class PaymentFactory {
   getGateway(method) {
-    switch (method) {
-      case 'stripe':
-        return StripeGateway;
+    switch (method.toLowerCase()) {
       case 'telebirr':
         return TelebirrGateway;
       case 'cbe':

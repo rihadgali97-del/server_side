@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
+const User = require('../models/User'); 
 const nodemailer = require('nodemailer');
 
-// 🛠️ Gmail Unified Configuration
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || 'gmail',
   auth: {
@@ -18,9 +18,6 @@ const buildPagination = (page = 1, limit = 10) => {
   return { currentPage, pageSize, skip };
 };
 
-/**
- * EMAIL HTML ENGINE: Generates responsive production templates with action buttons
- */
 const generateEmailTemplate = (title, message, buttonText, buttonUrl) => {
   return `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
@@ -45,9 +42,6 @@ const generateEmailTemplate = (title, message, buttonText, buttonUrl) => {
   `;
 };
 
-/**
- * CORE LOGIC: Save to DB and Emit Socket
- */
 const createNotification = async ({ io, userId, title, message, type = 'info', metadata = {} }) => {
   if (!userId) throw new Error('Notification must have a recipient');
 
@@ -67,9 +61,6 @@ const createNotification = async ({ io, userId, title, message, type = 'info', m
   return notification;
 };
 
-/**
- * EMAIL WRAPPER: Prevents application crash loops if Gmail rejection flags trip
- */
 const attemptEmailSend = async (mailOptions) => {
   try {
     const info = await transporter.sendMail(mailOptions);
@@ -82,11 +73,6 @@ const attemptEmailSend = async (mailOptions) => {
   }
 };
 
-/**
- * SPECIALIZED TRANSACTIONAL TEMPLATES
- */
-
-// 1. Low Stock Alert
 const sendLowStockAlert = async ({ io, vendorEmail, userId, product }) => {
   const title = "⚠️ Low Stock Alert";
   const message = `Product "${product.name}" is dropping below standard capacity bounds (${product.stock} items remaining). Update stock listings immediately to retain buyer traffic metrics.`;
@@ -101,7 +87,6 @@ const sendLowStockAlert = async ({ io, vendorEmail, userId, product }) => {
   });
 };
 
-// 2. Order Status Update (Notify Customer)
 const sendOrderStatusNotification = async ({ io, userEmail, userId, orderId, status }) => {
   const title = `📦 Order ${status.toUpperCase()}`;
   const message = `Great news! Your package milestone signature tracker has advanced. Your order #${orderId.toString().slice(-6)} has transitioned status to: ${status}.`;
@@ -116,7 +101,6 @@ const sendOrderStatusNotification = async ({ io, userEmail, userId, orderId, sta
   });
 };
 
-// 3. New Order Received (Notify Vendor)
 const sendNewOrderNotification = async ({ io, vendorEmail, userId, orderId }) => {
   const title = "💰 New Order Received!";
   const message = `An item matching your inventory distribution pipeline was successfully purchased! Order target reference sequence: #${orderId.toString().slice(-6)}. Open the fulfillment workspace for routing details.`;
@@ -131,7 +115,6 @@ const sendNewOrderNotification = async ({ io, vendorEmail, userId, orderId }) =>
   });
 };
 
-// 4. Security Alert (New Login)
 const sendSecurityAlert = async ({ io, userEmail, userId }) => {
   const title = "🔒 New Login Detected";
   const message = `Security validation warning: An active session initialization protocol handshake occurred on your user registry at ${new Date().toLocaleString()}. If this wasn't you, reset credentials instantly.`;
@@ -146,7 +129,6 @@ const sendSecurityAlert = async ({ io, userEmail, userId }) => {
   });
 };
 
-// 5. Vendor Rank Update
 const sendVendorRankNotification = async ({ io, vendorEmail, userId, newRank }) => {
   const title = "🌟 Level Up! Your Rank Updated";
   const message = `Congratulations! Based on your sustained trust score evaluations and delivery execution metrics, your core vendor baseline has officially scaled to: **${newRank}**.`;
@@ -168,9 +150,40 @@ const sendVendorRankNotification = async ({ io, vendorEmail, userId, newRank }) 
   });
 };
 
-/**
- * DATA FETCHING LOGIC
- */
+// 6. 🛠️ NEW: Payment Success (Notify Customer & Vendors)
+const sendPaymentSuccessNotification = async ({ io, order, user, amount, currency }) => {
+  const customerTitle = "🎉 Payment Successful";
+  const customerMessage = `Your payment of ${amount} ${currency.toUpperCase()} for order #${order._id.toString().slice(-6)} has been successfully processed.`;
+  
+  await createNotification({ io, userId: user._id, title: customerTitle, message: customerMessage, type: 'success' });
+
+  await attemptEmailSend({
+    from: `"NextCart Billing" <${process.env.EMAIL_USER}>`,
+    to: user.email,
+    subject: customerTitle,
+    html: generateEmailTemplate(customerTitle, customerMessage, "View Receipt", `${process.env.FRONTEND_URL}/orders/${order._id}`)
+  });
+
+  const vendorIds = [...new Set(order.orderItems.map(item => item.vendor).filter(Boolean))];
+  
+  for (const vId of vendorIds) {
+    const vendorUser = await User.findById(vId);
+    if (vendorUser) {
+      const vendorTitle = "💳 Payment Cleared for New Order";
+      const vendorMessage = `Payment for order #${order._id.toString().slice(-6)} has cleared the gateway. You are cleared to begin fulfillment routing.`;
+      
+      await createNotification({ io, userId: vendorUser._id, title: vendorTitle, message: vendorMessage, type: 'success' });
+
+      await attemptEmailSend({
+        from: `"NextCart Finance" <${process.env.EMAIL_USER}>`,
+        to: vendorUser.email,
+        subject: vendorTitle,
+        html: generateEmailTemplate(vendorTitle, vendorMessage, "Fulfill Order Now", `${process.env.FRONTEND_URL}/vendor/orders/${order._id}`)
+      });
+    }
+  }
+};
+
 const getNotifications = async ({ userId, page = 1, limit = 10, read, type }) => {
   if (!userId) throw new Error('User ID is required');
   const { currentPage, pageSize, skip } = buildPagination(page, limit);
@@ -220,7 +233,8 @@ module.exports = {
   sendOrderStatusNotification,
   sendNewOrderNotification,
   sendSecurityAlert,
-  sendVendorRankNotification, 
+  sendVendorRankNotification,
+  sendPaymentSuccessNotification,
   getNotifications,
   getUnreadCount,
   markAsRead,

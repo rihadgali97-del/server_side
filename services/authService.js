@@ -62,10 +62,15 @@ class AuthService {
     }
 
     const verifyUrl = `${protocol}://${host}/api/auth/verify-email/${verificationToken}`;
-    const message = `Welcome to NextCart, ${name}!\n\nPlease verify your account by clicking the link below:\n\n${verifyUrl}`;
+    const message = `Welcome to NextCart, ${name}!\n\nPlease verify your account by clicking the link below:`;
 
     try {
-      await sendEmail({ email: user.email, subject: "Verify your Account", message });
+      await sendEmail({ 
+        email: user.email, 
+        subject: "Verify your Account", 
+        message,
+        resetUrl: verifyUrl 
+      });
     } catch (err) {
       console.error("Email failed to send during registration");
     }
@@ -119,18 +124,16 @@ class AuthService {
 
   async forgotPassword(email, protocol, host) {
     const user = await User.findOne({ email });
-    if (!user) return; // Silent return prevents account enumeration discovery
+    if (!user) return; 
 
     const resetToken = crypto.randomBytes(32).toString("hex");
     user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
     user.resetPasswordExpires = Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000;
     await user.save();
 
-    // Cleanly manage matching application URL patterns
     const clientUrl = process.env.CLIENT_URL || `${protocol}://${host}`;
     const resetUrl = `${clientUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
     
-    // 🔗 Passing 'resetUrl' down now triggers the modern UI red action button inside Gmail!
     await sendEmail({
       email: user.email,
       subject: "Reset your NextCart password",
@@ -138,7 +141,6 @@ class AuthService {
         `Hi ${user.name},\n\n` +
         `We received a request to reset your NextCart password.\n\n` +
         `Use this secure link within ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes:\n\n` +
-        `${resetUrl}\n\n` +
         `If you did not request this, you can safely ignore this email.`,
       resetUrl: resetUrl 
     });

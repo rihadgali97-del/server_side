@@ -4,13 +4,13 @@ const {
   addToCart,
   getCart,
   removeFromCart,
-  clearCart // Add this import
+  clearCart 
 } = require("../controller/cartController");
 const { protect } = require("../middleware/authMiddleware");
 
 router.post("/", protect, addToCart);
 router.get("/", protect, getCart);
-router.delete("/", protect, clearCart); // Added this: DELETE /api/cart
+router.delete("/", protect, clearCart);
 router.delete("/:productId", protect, removeFromCart);
 
 module.exports = router;

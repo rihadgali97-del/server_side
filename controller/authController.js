@@ -1,6 +1,6 @@
 const authService = require("../services/authService");
 const User = require("../models/User");
-const Vendor = require("../models/Vendor"); // 🛠️ NEW: Imported Vendor model for OAuth registration
+const Vendor = require("../models/Vendor"); // 🛠️ Link to vendor tracking models
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -70,13 +70,7 @@ exports.resetPassword = async (req, res, next) => {
   }
 };
 
-/**
- * Professional Google OAuth Authentication Pipeline
- * Validates integrity via Google identity certificates, forks registration vs login states,
- * and passes matching structural payloads out downstream.
- */
 exports.googleAuth = async (req, res, next) => {
-  // 🛠️ NEW: Extract faydaNumber and licenseNumber for vendor OAuth signups
   const { idToken, role, longitude, latitude, faydaNumber, licenseNumber } = req.body;
 
   if (!idToken) {
@@ -110,8 +104,8 @@ exports.googleAuth = async (req, res, next) => {
         googleId,
         avatar: picture,
         role: targetRole,
-        isVerified: true, // Google profiles are verified at origin
-        password: crypto.randomBytes(32).toString('hex') // Strong internal password fallback
+        isVerified: true, // Google profiles are pre-verified at source origin
+        password: crypto.randomBytes(32).toString('hex') // Randomized password for OAuth users
       };
 
       // Map optional geospatial telemetry parameters dynamically if present
@@ -125,7 +119,7 @@ exports.googleAuth = async (req, res, next) => {
       user = new User(newUserData);
       await user.save();
 
-      // 🛠️ NEW: Link Vendor profile generation to Google OAuth flow
+      // Link Vendor profile generation to Google OAuth flow
       if (targetRole === 'vendor') {
         await Vendor.create({
           user: user._id,
