@@ -8,7 +8,6 @@ const connectDB = require("./config/db");
 const { swaggerUi, specs } = require('./config/swagger');
 
 // 1. Database Connection
-connectDB();
 
 // 2. Create HTTP Server
 const server = http.createServer(app);
@@ -86,8 +85,13 @@ app.use('/api/search', searchRoutes);
 const errorHandler = require('./middleware/errorMiddleware');
 app.use(errorHandler);
 
-// 10. Start Server
+// 10. Start Server after the database is ready
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+connectDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  });
+}).catch((error) => {
+  console.error('❌ Server startup failed:', error.message);
+  process.exit(1);
 });

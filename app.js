@@ -35,10 +35,10 @@ app.use(cors({
     // In production, also allow your explicit Vercel frontend URL configuration
     if (allowedOrigins.indexOf(origin) !== -1 || origin === process.env.FRONTEND_URL || origin === process.env.CLIENT_URL) {
       return callback(null, true);
-    } else {
-      // For loose initial testing, fallback to allow if needed, or enforce strictness:
+    } else if (process.env.NODE_ENV !== 'production') {
       return callback(null, true); 
     }
+    return callback(new Error('Origin not allowed by CORS'));
   },
   credentials: true
 }));
@@ -80,13 +80,10 @@ app.use((req, res, next) => {
   if (req.params) deepClean(req.params);
   
   if (req.query) {
-    Object.keys(req.query).forEach(key => {
-      if (typeof req.query[key] === 'string') {
-        req.query[key] = req.query[key].replace(/<[^>]*>?/gm, '');
-      } else if (typeof req.query[key] === 'object') {
-        deepClean(req.query[key]);
-      }
-    });
+    const sanitizedQuery = Object.fromEntries(
+      Object.entries(req.query).map(([key, value]) => [key, deepClean(value)])
+    );
+    Object.defineProperty(req, 'query', { value: sanitizedQuery, enumerable: true });
   }
   next();
 });
@@ -95,6 +92,16 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 8. TEST ROUTE
+app.get('/health/live', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'nextcart-api' });
+});
+
+app.get('/health/ready', (req, res) => {
+  const mongoose = require('mongoose');
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready', database: ready ? 'connected' : 'disconnected' });
+});
+
 app.get("/", (req, res) => {
   res.send("NextCart API is running flawlessly...");
 });

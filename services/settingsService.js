@@ -88,14 +88,15 @@ const fetchAdminGlobalSettings = async () => {
 };
 
 const updateAdminGlobalSettings = async (body) => {
-    const { commissionRate, defaultCurrency, globalConfigurations } = body;
+    const { commissionRate, defaultCurrency, globalConfigurations = {} } = body;
     let settings = await Settings.findOne() || new Settings();
 
     if (commissionRate !== undefined) settings.commissionRate = commissionRate;
     if (defaultCurrency) settings.defaultCurrency = defaultCurrency;
-    if (globalConfigurations) {
-        settings.globalConfigurations = { ...settings.globalConfigurations, ...globalConfigurations };
-    }
+    const directConfig = ['maintenanceMode', 'allowNewVendors', 'maxOrderValue', 'minOrderValue', 'taxRate', 'freeShippingThreshold']
+        .reduce((config, key) => body[key] === undefined ? config : { ...config, [key]: body[key] }, {});
+    const existingConfig = settings.globalConfigurations?.toObject?.() || settings.globalConfigurations || {};
+    settings.globalConfigurations = { ...existingConfig, ...globalConfigurations, ...directConfig };
 
     return await settings.save();
 };

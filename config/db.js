@@ -12,6 +12,10 @@ const connectDB = async () => {
     });
     console.log(`☁️ Connected to MongoDB Atlas (Cloud): ${conn.connection.host}`);
   } catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`❌ Atlas connection failed in production: ${error.message}`);
+      throw error;
+    }
     console.log(`🌐 Atlas connection unavailable. Switching to Local DB...`);
 
     try {

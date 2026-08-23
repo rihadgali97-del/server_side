@@ -1,4 +1,5 @@
 const settingsService = require('../services/settingsService');
+const { recordAuditLog } = require('../utils/auditLogger');
 
 // User Settings
 exports.getUserProfile = async (req, res) => {
@@ -66,8 +67,15 @@ exports.getAdminSettings = async (req, res) => {
 exports.updateAdminSettings = async (req, res) => {
     try {
         const settings = await settingsService.updateAdminGlobalSettings(req.body);
+        await recordAuditLog(req, {
+            action: 'UPDATE_SYSTEM_CONFIG',
+            target: 'Global Settings',
+            details: 'Admin configuration updated',
+            after: req.body
+        });
         res.json({ success: true, data: settings });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error updating admin settings' });
+        console.error('Admin settings update failed:', error);
+        res.status(500).json({ success: false, message: error.message || 'Error updating admin settings' });
     }
 };

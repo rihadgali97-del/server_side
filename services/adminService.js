@@ -1,9 +1,9 @@
 const User = require('../models/User');
+const AuditLog = require('../models/AuditLog');
 const Vendor = require('../models/Vendor');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const Review = require('../models/Review');
-const AuditLog = require('../models/AuditLog');
 const Settings = require('../models/Settings');
 
 const getStats = async () => {
@@ -128,15 +128,6 @@ const processVendorVerification = async (id, body, adminId, ip) => {
     }
 
     const vendor = await Vendor.findByIdAndUpdate(id, { $set: updateData }, { new: true });
-    if (vendor) {
-        await AuditLog.create({
-            adminId,
-            action: 'VERIFY_VENDOR',
-            target: vendor.businessName,
-            details: `Status set to: ${status}`,
-            ipAddress: ip || '0.0.0.0'
-        });
-    }
     return vendor;
 };
 
@@ -200,15 +191,8 @@ const fetchAuditLogs = async () => {
     return await AuditLog.find().populate('adminId', 'name email').sort({ timestamp: -1 }).limit(100);
 };
 
-const modifyAdminSettings = async (data, adminId, ip) => {
+const modifyAdminSettings = async (data) => {
     const updatedSettings = await Settings.findOneAndUpdate({}, data, { upsert: true, new: true });
-    await AuditLog.create({
-        adminId,
-        action: 'UPDATE_SYSTEM_CONFIG',
-        target: 'Global Settings',
-        details: `Config updated by admin`,
-        ipAddress: ip || '0.0.0.0'
-    });
     return updatedSettings;
 };
 
