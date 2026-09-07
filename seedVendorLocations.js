@@ -1,14 +1,19 @@
+/**
+ * seedVendorLocations.js
+ * Seeds all vendors with coordinates near YOUR actual location
+ * (Addis Ababa area — lat: 8.98, lng: 38.75)
+ * 
+ * Usage: node seedVendorLocations.js
+ */
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Vendor   = require('./models/Vendor'); 
 
-// ── Coordinates near Jimma, Ethiopia (customer's location) ──────────────
-// Each vendor gets a slightly different position within 30km of Jimma city center
-const JIMMA_CENTER = { lng: 36.8331, lat: 7.6780 };
+// ── Your actual GPS location from the browser ──────────────────────────────────
+const CENTER = { lng: 38.75, lat: 8.98 }; // Addis Ababa
 
-// Small offsets in degrees (~1° ≈ 111km, so 0.05° ≈ 5.5km)
+// Small offsets — each vendor within 5–15km of center
 const OFFSETS = [
-  { lng:  0.000, lat:  0.000 },  // Jimma center
+  { lng:  0.000, lat:  0.000 },  // center
   { lng:  0.020, lat:  0.015 },  // ~2km NE
   { lng: -0.015, lat:  0.025 },  // ~3km N
   { lng:  0.035, lat: -0.010 },  // ~4km E
@@ -22,36 +27,29 @@ const OFFSETS = [
 
 async function seed() {
   await mongoose.connect(process.env.MONGO_URI || process.env.MONGODB_URI);
-  console.log('Connected to MongoDB');
+  console.log('✅ Connected\n');
 
-  const vendors = await Vendor.find({});
-  console.log(`Found ${vendors.length} vendors`);
+  const db      = mongoose.connection.db;
+  const vendors = await db.collection('vendors').find({}).toArray();
+  console.log(`Found ${vendors.length} vendors\n`);
 
-  let updated = 0;
   for (let i = 0; i < vendors.length; i++) {
     const offset = OFFSETS[i % OFFSETS.length];
     const coords = [
-      JIMMA_CENTER.lng + offset.lng,
-      JIMMA_CENTER.lat + offset.lat,
+      +(CENTER.lng + offset.lng).toFixed(6),
+      +(CENTER.lat + offset.lat).toFixed(6),
     ];
-
-    await Vendor.findByIdAndUpdate(vendors[i]._id, {
-      location: {
-        type: 'Point',
-        coordinates: coords,
-      }
-    });
-
-    console.log(`✓ Updated vendor "${vendors[i].businessName}" → [${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}]`);
-    updated++;
+    await db.collection('vendors').updateOne(
+      { _id: vendors[i]._id },
+      { $set: { location: { type: 'Point', coordinates: coords } } }
+    );
+    console.log(`✓ "${vendors[i].businessName}" → [${coords[0]}, ${coords[1]}]`);
   }
 
-  console.log(`\n✅ Done — updated ${updated} vendors with Jimma-area coordinates`);
-  console.log('Now reload the Near Me section — products should appear within 50km');
+  console.log(`\n✅ Done — all vendors now within 15km of your location`);
+  console.log(`   Your location: [${CENTER.lng}, ${CENTER.lat}]`);
+  console.log('   Reload Near Me — products will appear now!');
   await mongoose.disconnect();
 }
 
-seed().catch(err => {
-  console.error('❌ Seed failed:', err.message);
-  process.exit(1);
-});
+seed().catch(err => { console.error('❌', err.message); process.exit(1); });

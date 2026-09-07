@@ -37,6 +37,14 @@ const trustWeightedSearch = async (req, res) => {
     const radiusKm    = parseFloat(req.query.radius) || 50;
     const skip        = (page - 1) * limit;
 
+    // ── DEBUG: log exactly what's received ───────────────────────────────────
+    console.log('[Search] Query params:', {
+      q, category, minPrice, maxPrice,
+      lng: req.query.lng, lat: req.query.lat,
+      radius: req.query.radius, page, limit,
+      userId: req.user?._id
+    });
+
     // Resolve coordinates — prefer query params, fall back to saved user location
     let lng = req.query.lng ? parseFloat(req.query.lng) : null;
     let lat = req.query.lat ? parseFloat(req.query.lat) : null;
@@ -58,6 +66,8 @@ const trustWeightedSearch = async (req, res) => {
       }).select('_id').lean();
 
       nearbyVendorIds = nearbyVendors.map(v => v._id);
+      console.log('[Search] Nearby vendors found:', nearbyVendors.length);
+      console.log('[Search] Nearby vendor IDs:', nearbyVendorIds.map(id=>id.toString()));
 
       // Build a rank map so we can sort by distance later
       nearbyVendors.forEach((v, i) => { vendorDistanceMap[v._id.toString()] = i; });
@@ -141,6 +151,8 @@ const trustWeightedSearch = async (req, res) => {
       Product.countDocuments(matchStage),
     ]);
 
+    console.log('[Search] Products found:', products.length, '| Total matching:', total);
+
     // ── Step 4: inject distance rank + sort by proximity first ───────────────
     let enriched = products;
     if (nearbyVendorIds !== null && Object.keys(vendorDistanceMap).length > 0) {
@@ -155,7 +167,7 @@ const trustWeightedSearch = async (req, res) => {
 
     const totalPages = Math.ceil(total / limit);
 
-    // search results must always return fresh data
+    // Prevent 304 Not Modified — search results must always return fresh data
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
     res.set("Pragma", "no-cache");
     res.set("Expires", "0");

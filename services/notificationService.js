@@ -22,7 +22,7 @@ const generateEmailTemplate = (title, message, buttonText, buttonUrl) => {
   return `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
       <div style="padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; text-align: center;">
-        <h2 style="color: #0f172a; margin: 0; font-size: 24px;">NextCart Platforms</h2>
+        <h2 style="color: #0f172a; margin: 0; font-size: 24px;">GebeyaPlus Platforms</h2>
       </div>
       <div style="padding: 24px 0;">
         <h3 style="color: #1e293b; margin-top: 0; font-size: 18px;">${title}</h3>
@@ -80,7 +80,7 @@ const sendLowStockAlert = async ({ io, vendorEmail, userId, product }) => {
   await createNotification({ io, userId, title, message, type: 'warning' });
 
   await attemptEmailSend({
-    from: `"NextCart Inventory" <${process.env.EMAIL_USER}>`,
+    from: `"GebeyaPlus Inventory" <${process.env.EMAIL_USER}>`,
     to: vendorEmail,
     subject: title,
     html: generateEmailTemplate(title, message, "Restock Inventory", `${process.env.FRONTEND_URL}/vendor/inventory`)
@@ -94,7 +94,7 @@ const sendOrderStatusNotification = async ({ io, userEmail, userId, orderId, sta
   await createNotification({ io, userId, title, message, type: 'success' });
 
   await attemptEmailSend({
-    from: `"NextCart Orders" <${process.env.EMAIL_USER}>`,
+    from: `"GebeyaPlus Orders" <${process.env.EMAIL_USER}>`,
     to: userEmail,
     subject: title,
     html: generateEmailTemplate(title, message, "View Order Tracking", `${process.env.FRONTEND_URL}/orders/${orderId}`)
@@ -108,7 +108,7 @@ const sendNewOrderNotification = async ({ io, vendorEmail, userId, orderId }) =>
   await createNotification({ io, userId, title, message, type: 'success' });
 
   await attemptEmailSend({
-    from: `"NextCart Sales" <${process.env.EMAIL_USER}>`,
+    from: `"GebeyaPlus Sales" <${process.env.EMAIL_USER}>`,
     to: vendorEmail,
     subject: title,
     html: generateEmailTemplate(title, message, "Fulfill Order Now", `${process.env.FRONTEND_URL}/vendor/dashboard`)
@@ -122,7 +122,7 @@ const sendSecurityAlert = async ({ io, userEmail, userId }) => {
   await createNotification({ io, userId, title, message, type: 'alert' });
 
   await attemptEmailSend({
-    from: `"NextCart Security" <${process.env.EMAIL_USER}>`,
+    from: `"GebeyaPlus Security" <${process.env.EMAIL_USER}>`,
     to: userEmail,
     subject: title,
     html: generateEmailTemplate(title, message, "Secure My Profile", `${process.env.FRONTEND_URL}/settings/security`)
@@ -143,7 +143,7 @@ const sendVendorRankNotification = async ({ io, vendorEmail, userId, newRank }) 
   });
 
   await attemptEmailSend({
-    from: `"NextCart Partners" <${process.env.EMAIL_USER}>`,
+    from: `"GebeyaPlus Partners" <${process.env.EMAIL_USER}>`,
     to: vendorEmail,
     subject: title,
     html: generateEmailTemplate(title, message, "Review New Tier Benefits", `${process.env.FRONTEND_URL}/vendor/reputation`)
@@ -158,7 +158,7 @@ const sendPaymentSuccessNotification = async ({ io, order, user, amount, currenc
   await createNotification({ io, userId: user._id, title: customerTitle, message: customerMessage, type: 'success' });
 
   await attemptEmailSend({
-    from: `"NextCart Billing" <${process.env.EMAIL_USER}>`,
+    from: `"GebeyaPlus Billing" <${process.env.EMAIL_USER}>`,
     to: user.email,
     subject: customerTitle,
     html: generateEmailTemplate(customerTitle, customerMessage, "View Receipt", `${process.env.FRONTEND_URL}/orders/${order._id}`)
@@ -175,7 +175,7 @@ const sendPaymentSuccessNotification = async ({ io, order, user, amount, currenc
       await createNotification({ io, userId: vendorUser._id, title: vendorTitle, message: vendorMessage, type: 'success' });
 
       await attemptEmailSend({
-        from: `"NextCart Finance" <${process.env.EMAIL_USER}>`,
+        from: `"GebeyaPlus Finance" <${process.env.EMAIL_USER}>`,
         to: vendorUser.email,
         subject: vendorTitle,
         html: generateEmailTemplate(vendorTitle, vendorMessage, "Fulfill Order Now", `${process.env.FRONTEND_URL}/vendor/orders/${order._id}`)

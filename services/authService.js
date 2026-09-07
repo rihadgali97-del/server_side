@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const Vendor = require("../models/Vendor");
-const sendEmail = require("../services/emailService"); 
+const { sendEmail, sendPasswordResetEmail } = require("../services/emailService"); 
 const notificationService = require("../services/notificationService");
 
 const PASSWORD_RESET_TOKEN_TTL_MINUTES = 10;
@@ -62,14 +62,13 @@ class AuthService {
     }
 
     const verifyUrl = `${protocol}://${host}/api/auth/verify-email/${verificationToken}`;
-    const message = `Welcome to NextCart, ${name}!\n\nPlease verify your account by clicking the link below:`;
+    const message = `Welcome to GebeyaPlus, ${name}!\n\nPlease verify your account by clicking the link below:\n\n${verifyUrl}`;
 
     try {
       await sendEmail({ 
         email: user.email, 
         subject: "Verify your Account", 
-        message,
-        resetUrl: verifyUrl 
+        message
       });
     } catch (err) {
       console.error("Email failed to send during registration");
@@ -115,7 +114,7 @@ class AuthService {
       io,
       userId: user._id,
       title: "Account Verified! ✅",
-      message: "Welcome to NextCart. Your account is now fully active.",
+      message: "Welcome to GebeyaPlus. Your account is now fully active.",
       type: "success"
     });
 
@@ -134,16 +133,8 @@ class AuthService {
     const clientUrl = process.env.CLIENT_URL || `${protocol}://${host}`;
     const resetUrl = `${clientUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
     
-    await sendEmail({
-      email: user.email,
-      subject: "Reset your NextCart password",
-      message:
-        `Hi ${user.name},\n\n` +
-        `We received a request to reset your NextCart password.\n\n` +
-        `Use this secure link within ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes:\n\n` +
-        `If you did not request this, you can safely ignore this email.`,
-      resetUrl: resetUrl 
-    });
+    // Updated: Pass the user object and resetUrl as direct positional arguments
+    await sendPasswordResetEmail(user, resetUrl);
   }
 
   async resetPassword(token, newPassword) {
