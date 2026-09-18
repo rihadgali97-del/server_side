@@ -1,28 +1,28 @@
 /**
  * seedVendorLocations.js
- * Seeds all vendors with coordinates near YOUR actual location
- * (Addis Ababa area — lat: 8.98, lng: 38.75)
+ * Seeds all vendors with coordinates near Bahir Dar
+ * (Bahir Dar area — lat: 11.5936, lng: 37.3908)
  * 
  * Usage: node seedVendorLocations.js
  */
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-// ── Your actual GPS location from the browser ──────────────────────────────────
-const CENTER = { lng: 38.75, lat: 8.98 }; // Addis Ababa
+// ── Bahir Dar GPS Location ─────────────────────────────────────────────────────
+const CENTER = { lng: 37.3908, lat: 11.5936 }; // Bahir Dar
 
-// Small offsets — each vendor within 5–15km of center
+// Small offsets — each vendor within 2–10km of Bahir Dar center
 const OFFSETS = [
-  { lng:  0.000, lat:  0.000 },  // center
-  { lng:  0.020, lat:  0.015 },  // ~2km NE
-  { lng: -0.015, lat:  0.025 },  // ~3km N
-  { lng:  0.035, lat: -0.010 },  // ~4km E
-  { lng: -0.025, lat: -0.020 },  // ~3km SW
-  { lng:  0.050, lat:  0.040 },  // ~6km NE
-  { lng: -0.040, lat:  0.030 },  // ~5km NW
-  { lng:  0.060, lat: -0.050 },  // ~8km SE
-  { lng: -0.060, lat: -0.040 },  // ~7km SW
-  { lng:  0.080, lat:  0.070 },  // ~10km NE
+  { lng:  0.000, lat:  0.000 },  // Center (Bahir Dar)
+  { lng:  0.015, lat:  0.010 },  // ~1.5km NE
+  { lng: -0.010, lat:  0.018 },  // ~2km N
+  { lng:  0.025, lat: -0.008 },  // ~2.5km E
+  { lng: -0.018, lat: -0.015 },  // ~2km SW
+  { lng:  0.035, lat:  0.028 },  // ~4km NE
+  { lng: -0.028, lat:  0.022 },  // ~3.5km NW
+  { lng:  0.042, lat: -0.035 },  // ~5km SE
+  { lng: -0.045, lat: -0.028 },  // ~5km SW
+  { lng:  0.055, lat:  0.048 },  // ~7km NE
 ];
 
 async function seed() {
@@ -46,8 +46,8 @@ async function seed() {
     console.log(`✓ "${vendors[i].businessName}" → [${coords[0]}, ${coords[1]}]`);
   }
 
-  console.log(`\n✅ Done — all vendors now within 15km of your location`);
-  console.log(`   Your location: [${CENTER.lng}, ${CENTER.lat}]`);
+  console.log(`\n✅ Done — all vendors now within Bahir Dar area`);
+  console.log(`   Bahir Dar center location: [${CENTER.lng}, ${CENTER.lat}]`);
   console.log('   Reload Near Me — products will appear now!');
   await mongoose.disconnect();
 }
