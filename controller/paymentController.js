@@ -1,9 +1,9 @@
-const mongoose    = require('mongoose'); // Required for atomic session-driven checkouts
+const mongoose    = require('mongoose');
 const Order       = require('../models/Order');
 const Transaction = require('../models/Transaction');
 const Wallet      = require('../models/Wallet');
 const telebirrService = require('../services/payment/telebirrService');
-const WalletService   = require('../services/WalletService'); // Interacts with internal balance ledger tier
+const WalletService   = require('../services/WalletService');
 const notificationService = require('../services/notificationService'); 
 
 const DEFAULT_CURRENCY = 'ETB';
@@ -38,41 +38,28 @@ const baseGatewayAdapter = (name) => ({
 });
 
 // Registering active payment modes
-registerGateway('cash',   baseGatewayAdapter('cash'));
-registerGateway('cbe',    baseGatewayAdapter('cbe'));
+registerGateway('cash', baseGatewayAdapter('cash'));
+registerGateway('cbe',  baseGatewayAdapter('cbe'));
 
-// Telebirr Native Hub Integration
+// Live Telebirr Native Hub Integration
 registerGateway('telebirr', {
   charge: async ({ order }) => {
     try {
-      // -----------------------------------------------------------------------
-      // 🔌 OPTION A: LOCAL DEVELOPMENT MOCK (Active by default for sandbox testing)
-      // -----------------------------------------------------------------------
-      console.log(`⚠️ Telebirr Mock Bypass Active: Simulating gateway link for Tracking Reference #${order._id}`);
-      return {
-        success:       true,
-        status:        'pending',
-        transactionId: order._id.toString(),
-        metadata:      { paymentUrl: `http://localhost:3000/mock-checkout?orderId=${order._id}&amt=${order.totalPrice}` }
-      };
-
-      // -----------------------------------------------------------------------
-      // 🚀 OPTION B: LIVE PRODUCTION / SANDBOX HUB (Uncomment when connection issues clear up)
-      // -----------------------------------------------------------------------
-      /*
       const response = await telebirrService.createTelebirrOrder(order);
       return {
-        success:       true,
-        status:        'pending',
+        success: true,
+        status: 'pending',
         transactionId: order._id.toString(),
-        metadata:      { paymentUrl: response.url }
+        metadata: { paymentUrl: response.url }
       };
-      */
     } catch (err) {
       return { success: false, error: err.message };
     }
   },
-  refund: async () => ({ success: false, error: 'Telebirr refunds must be processed manually via the Fabric dashboard.' })
+  refund: async () => ({
+    success: false,
+    error: 'Telebirr refunds must be processed manually via the Fabric dashboard.'
+  })
 });
 
 const resolveWallet = async (userId) => {
@@ -125,7 +112,7 @@ exports.initiateTelebirrPayment = async (req, res) => {
         type:          'deposit',
         amount:        order.totalPrice || 0,
         currency:      DEFAULT_CURRENCY,
-        description:   `Initiated Telebirr payment for order ${order._id}`,
+        description:  `Initiated Telebirr payment for order ${order._id}`,
         reference:     order._id.toString(),
         referenceType: 'payment',
         status:        'pending',
@@ -169,7 +156,6 @@ exports.telebirrWebhook = async (req, res) => {
       payload?.trade_status === 'Trade_Success';
 
     if (outTradeNo && isSuccess) {
-      // 🛠️ heavily populate core user relational data for the dynamic email wrappers
       const order = await Order.findById(outTradeNo).populate('user');
 
       if (order && !order.isPaid) {
@@ -186,10 +172,8 @@ exports.telebirrWebhook = async (req, res) => {
 
         console.log(`✅ Telebirr payment confirmed for order ${order._id}`);
 
-        // ── DISPATCH TRANSACTION DISPATCH HANDSHAKE (NON-CRASHING) ──
         try {
           const io = req.app.get('io');
-          // Fallback array mapping to guarantee notification architecture compatibility
           order.orderItems = order.orderItems || order.items || [];
           
           await notificationService.sendPaymentSuccessNotification({
@@ -204,7 +188,6 @@ exports.telebirrWebhook = async (req, res) => {
         }
 
       } else if (outTradeNo.startsWith('DEP-')) {
-        // Fallback processing node for internal standalone user deposits
         const pendingTx = await Transaction.findOne({
           reference: outTradeNo,
           referenceType: 'deposit',
@@ -320,7 +303,6 @@ exports.payWithWallet = async (req, res) => {
     const orderAmount = order.totalPrice || 0;
     const currency = order.currency || DEFAULT_CURRENCY;
 
-    // Fetch user wallet document inside transactional boundary session
     const buyerWallet = await WalletService.getOrCreateWallet(userId, session, false);
     
     if (!buyerWallet.isActive || buyerWallet.isFrozen) {
@@ -339,11 +321,9 @@ exports.payWithWallet = async (req, res) => {
       });
     }
 
-    // Deduct total amount from balance map
     buyerWallet.balances.set(currency, currentAvailableBalance - orderAmount);
     await buyerWallet.save({ session });
 
-    // Generate immediate ledger debit entry row
     const checkoutTxRef = `WLT-PAY-${order._id}-${Date.now()}`;
     await Transaction.create([{
       wallet: buyerWallet._id,
@@ -356,7 +336,6 @@ exports.payWithWallet = async (req, res) => {
       status: 'completed'
     }], { session });
 
-    // Route money into vendor pending escrow buffer space allocation pools
     if (order.vendor) {
       await WalletService.addPendingFunds(order.vendor, orderAmount, currency, session, true);
     } else if (order.items && order.items.length > 0) {
@@ -369,7 +348,6 @@ exports.payWithWallet = async (req, res) => {
       }
     }
 
-    // Finalize order status indicators
     order.isPaid = true;
     order.paidAt = new Date();
     order.paymentMethod = 'wallet';
@@ -379,7 +357,6 @@ exports.payWithWallet = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // ── DISPATCH WALLET TRANSACTION DISPATCH HANDSHAKE (NON-CRASHING POST-COMMIT) ──
     try {
       const io = req.app.get('io');
       const fullyPopulatedOrder = await Order.findById(orderId).populate('user');
@@ -413,9 +390,7 @@ exports.payWithWallet = async (req, res) => {
   }
 };
 
-//     General — get order payment summary + transaction history
-//    GET /api/payments/:id/summary
-// @access  Protected
+// GET /api/payments/:id/summary
 exports.getPaymentSummary = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -432,23 +407,15 @@ exports.getPaymentSummary = async (req, res) => {
   }
 };
 
-// =========================================================================
-// 💡 MOCKED STUBS FOR STRIPE (Safeguards against UI breakdown)
-// =========================================================================
-
-// @desc    Stripe — Mocked payment intent creation
-// @route   POST /api/payments/create-payment-intent
+// Stripe Mock Stubs
 exports.createPaymentIntent = async (req, res) => {
   return res.status(200).json({ success: true, clientSecret: 'mock_stripe_disabled_by_user' });
 };
 
-// @desc    Stripe — Mocked webhook placeholder receiver
-// @route   POST /api/payments/webhook
 exports.stripeWebhook = async (req, res) => {
   return res.status(200).json({ received: true, note: 'Stripe functionality skipped' });
 };
 
-// @route   PUT /api/payments/verify/:id
 exports.verifyPayment = async (req, res) => {
   return res.status(200).json({ success: true, status: 'completed', message: 'Stripe simulation verified' });
 };

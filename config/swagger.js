@@ -5,9 +5,9 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'NextCart Multi-Vendor API',
+      title: 'GebeyaPlus Multi-Vendor API',
       version: '1.0.0',
-      description: 'Comprehensive API documentation for the NextCart e-commerce platform. Built by Rihad Gali.',
+      description: 'Comprehensive API documentation for the GebeyaPlus e-commerce platform. Built by Rihad Gali.',
       contact: {
         name: 'Rihad Gali',
         email: 'yrihadgali97@gmail.com',

@@ -10,8 +10,8 @@ const requiredHandlers = [
   'createPaymentIntent',
   'verifyPayment',
   'initiateTelebirrPayment',
-  'initiateWalletDeposit', // 🆕 Added to safeguard wallet deposit initiation
-  'payWithWallet',          // 🆕 Added to safeguard wallet balance checkout
+  'initiateWalletDeposit',
+  'payWithWallet',          
   'getPaymentSummary'
 ];
 
