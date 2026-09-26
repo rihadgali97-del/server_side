@@ -8,7 +8,7 @@ const logger = winston.createLogger({
     winston.format.splat(),
     winston.format.json() // Production standard
   ),
-  defaultMeta: { service: 'nextcart-service' },
+  defaultMeta: { service: 'gebeya-service' },
   transports: [
     // 1. Write all errors to error.log
     new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),

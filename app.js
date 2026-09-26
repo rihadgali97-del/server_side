@@ -93,7 +93,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 8. TEST ROUTE
 app.get('/health/live', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'nextcart-api' });
+  res.status(200).json({ status: 'ok', service: 'gebeyaplus-api' });
 });
 
 app.get('/health/ready', (req, res) => {
@@ -103,7 +103,7 @@ app.get('/health/ready', (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("NextCart API is running flawlessly...");
+  res.send("GebeyaPlus API is running flawlessly...");
 });
 
 module.exports = app;

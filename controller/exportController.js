@@ -91,7 +91,7 @@ exports.adminExportOrdersCSV = async (req, res) => {
   try {
     const orders = await fetchOrders(buildQuery(req.query));
     const csv    = toCSV(orders, ORDER_HEADERS);
-    const fname  = `nextcart-orders-${Date.now()}.csv`;
+    const fname  = `gebeyaplus-orders-${Date.now()}.csv`;
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
     res.send(csv);
@@ -137,7 +137,7 @@ exports.adminExportRevenueCSV = async (req, res) => {
       { label:'Delivery Rate (%)', fn: r => ((r.delivered/r.orders)*100).toFixed(1) },
     ];
     const csv   = toCSV(rows, headers);
-    const fname = `nextcart-revenue-${Date.now()}.csv`;
+    const fname = `gebeyaplus-revenue-${Date.now()}.csv`;
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
     res.send(csv);
@@ -184,7 +184,7 @@ exports.adminExportVendorRevenueCSV = async (req, res) => {
       { label:'Trust Score',     key:'score' },
     ];
     const csv   = toCSV(rows, headers);
-    const fname = `nextcart-vendor-revenue-${Date.now()}.csv`;
+    const fname = `gebeyaplus-vendor-revenue-${Date.now()}.csv`;
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
     res.send(csv);

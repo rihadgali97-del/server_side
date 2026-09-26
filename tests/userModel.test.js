@@ -14,7 +14,7 @@ describe("User Model Schema Validation Tests", () => {
   });
 
   // Test 2: Digital Trust & Reputation System Default Configurations
-  it("should correctly apply default values for NextCart digital trust layers", () => {
+  it("should correctly apply default values for GebeyaPlus digital trust layers", () => {
     const user = new User({
       name: "Rihad Gali",
       email: "rihad@example.com",

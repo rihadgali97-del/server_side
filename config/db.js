@@ -31,7 +31,7 @@ const connectDB = async () => {
 
   // 2. Fallback to Local MongoDB instantly if offline or Atlas times out
   try {
-    const localConn = await mongoose.connect("mongodb://127.0.0.1:27017/nextcartdb", {
+    const localConn = await mongoose.connect("mongodb://127.0.0.1:27017/gebeyaplusdb", {
       serverSelectionTimeoutMS: 2000,
     });
     console.log(`💻 Connected to Local MongoDB (Offline Mode): ${localConn.connection.host}`);

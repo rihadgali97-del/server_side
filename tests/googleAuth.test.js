@@ -37,7 +37,7 @@ jest.mock("../middleware/rateLimiter", () => ({
 jest.mock('google-auth-library', () => {
   const mTicket = {
     getPayload: jest.fn().mockReturnValue({
-      email: 'vendor.oauth@nextcart.com',
+      email: 'vendor.oauth@gebeyaplus.com',
       sub: 'google_unique_id_123456',
       name: 'Oauth Vendor Test',
       picture: 'https://example.com/avatar.jpg'

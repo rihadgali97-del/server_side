@@ -27,27 +27,32 @@ class TelebirrService {
    * Formats payload into string query parameters sorted alphabetically by key
    * to construct a signed hash string matching Telebirr's security architecture.
    */
-  generateFabricSignature(payload) {
-    try {
-      const filteredKeys = Object.keys(payload)
-        .filter(key => key !== 'sign' && payload[key] !== undefined && payload[key] !== '')
-        .sort();
+generateFabricSignature(payload) {
+  try {
+    // 1. Get object keys, exclude invalid/ignored fields ('sign', undefined, empty string), and sort alphabetically
+    const filteredKeys = Object.keys(payload)
+      .filter(key => key !== 'sign' && payload[key] !== undefined && payload[key] !== '')
+      .sort();
 
-      const signString = filteredKeys
-        .map(key => {
-          const val = typeof payload[key] === 'object' ? JSON.stringify(payload[key]) : payload[key];
-          return `${key}=${val}`;
-        })
-        .join('&');
+    // 2. Format sorted keys into a query string ("key1=value1&key2=value2")
+    // Nested objects/arrays are serialized to JSON strings
+    const signString = filteredKeys
+      .map(key => {
+        const val = typeof payload[key] === 'object' ? JSON.stringify(payload[key]) : payload[key];
+        return `${key}=${val}`;
+      })
+      .join('&');
 
-      const sign = crypto.createSign('SHA256');
-      sign.update(signString);
-      return sign.sign(this.getPrivateKey(), 'base64');
-    } catch (error) {
-      console.error('❌ Fabric Cryptographic Signing Exception:', error.message);
-      throw error;
-    }
+    // 3. Initialize SHA256 sign object, feed the formatted string, and sign with private key using base64 encoding
+    const sign = crypto.createSign('SHA256');
+    sign.update(signString);
+    return sign.sign(this.getPrivateKey(), 'base64');
+  } catch (error) {
+    // 4. Log signature generation errors and rethrow the exception
+    console.error('❌ Fabric Cryptographic Signing Exception:', error.message);
+    throw error;
   }
+}
 
   /**
    * Order creation processor logic.
@@ -77,7 +82,7 @@ class TelebirrService {
         return_url: `${process.env.FRONTEND_URL}/payment-success`,
         timestamp: Math.floor(Date.now() / 1000).toString(),
         total_amount: Number(order.totalPrice).toFixed(2).toString(),
-        title: "NextCart Purchase"
+        title: "GebeyaPlus Purchase"
       };
 
       const rsaSignature = this.generateFabricSignature(rawRequestPayload);

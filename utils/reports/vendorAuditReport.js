@@ -8,7 +8,7 @@ exports.generateVendorAuditPDF = (vendors, res) => {
   doc.pipe(res);
 
   // 2. Add Content
-  doc.fontSize(25).fillColor('#2c3e50').text('NextCart Trust Audit', { align: 'center' });
+  doc.fontSize(25).fillColor('#2c3e50').text('GebeyaPlus Trust Audit', { align: 'center' });
   doc.moveDown();
   doc.fontSize(10).fillColor('black').text(`Report Generated: ${new Date().toLocaleString()}`, { align: 'right' });
   doc.hr(); // Horizontal line

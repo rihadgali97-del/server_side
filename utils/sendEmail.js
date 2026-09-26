@@ -20,11 +20,11 @@ const sendEmail = async (options) => {
     emailHtml = `
       <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
         <div style="text-align: center; margin-bottom: 24px;">
-          <h2 style="color: #0f172a; margin: 0; font-size: 22px; font-weight: 700;">NextCart Account Security</h2>
+          <h2 style="color: #0f172a; margin: 0; font-size: 22px; font-weight: 700;">GebeyaPlus Account Security</h2>
         </div>
         <div style="color: #334155; font-size: 15px; line-height: 1.6;">
           <p>Hello,</p>
-          <p>We received a request to reset the password associated with your NextCart account credentials. Click the button below to initialize your security override and configure a new password:</p>
+          <p>We received a request to reset the password associated with your GebeyaPlus account credentials. Click the button below to initialize your security override and configure a new password:</p>
           
           <div style="text-align: center; margin: 32px 0;">
             <a href="${options.resetUrl || '#'}" style="background-color: #dc2626; color: #ffffff; padding: 14px 28px; text-decoration: none; font-weight: 600; font-size: 15px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.2);">
@@ -37,7 +37,7 @@ const sendEmail = async (options) => {
           </p>
         </div>
         <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px;">
-          <p style="margin: 0;">NextCart Infrastructure Layer &copy; 2026</p>
+          <p style="margin: 0;">GebeyaPlus Infrastructure Layer &copy; 2026</p>
         </div>
       </div>
     `;
@@ -45,7 +45,7 @@ const sendEmail = async (options) => {
 
   // 3. Fallback to basic configuration if no specialized HTML is provided
   const mailOptions = {
-    from: `"NextCart Security" <${process.env.EMAIL_USER}>`,
+    from: `"GebeyaPlus Security" <${process.env.EMAIL_USER}>`,
     to: options.email,
     subject: options.subject,
     text: options.message, // Plain text fallback for legacy clients

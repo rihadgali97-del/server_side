@@ -112,7 +112,7 @@ const seedDB = async () => {
         price: 1200.00,
         category: categoriesMap["Apparel"],
         subCategory: "T-Shirts",
-        brand: "NextCart Studio",
+        brand: "GebeyaPlus Studio",
         stock: 50,
         vendor: vendorId,
         images: [

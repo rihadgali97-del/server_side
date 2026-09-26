@@ -12,7 +12,7 @@ describe("Authentication Controller Unit Test Handshakes", () => {
     req = {
       body: {
         name: "Test Vendor",
-        email: "vendor@nextcart.com",
+        email: "vendor@gebeyaplus.com",
         password: "secureVendorPassword123"
       },
       protocol: "http",
@@ -31,7 +31,7 @@ describe("Authentication Controller Unit Test Handshakes", () => {
     const mockReturnedUser = {
       id: "mockedUserId123",
       name: "Test Vendor",
-      email: "vendor@nextcart.com"
+      email: "vendor@gebeyaplus.com"
     };
 
     // Force authService pipeline to mock a complete registration allocation return

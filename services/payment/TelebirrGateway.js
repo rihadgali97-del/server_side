@@ -15,11 +15,11 @@ class TelebirrGateway {
       // 2. Prepare Order Data
       const orderData = {
         appId: process.env.TELEBIRR_APP_ID,
-        receiverName: "NextCart",
+        receiverName: "GebeyaPlus",
         shortCode: process.env.TELEBIRR_SHORT_CODE,
         outTradeNo: order._id.toString(),
         totalAmount: totalPrice.toString(),
-        subject: "NextCart Order",
+        subject: "GebeyaPlus Order",
         timeoutExpress: "30",
         nonce: crypto.randomBytes(16).toString('hex'),
         timestamp: Date.now().toString(),
