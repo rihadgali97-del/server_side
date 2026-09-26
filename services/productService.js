@@ -1,5 +1,7 @@
 const Product = require("../models/Product");
 const Vendor = require("../models/Vendor");
+const Category = require("../models/Category");
+const mongoose = require("mongoose");
 const notificationService = require("../services/notificationService");
 
 const createProduct = async (userId, body, filePath, io) => {
@@ -111,7 +113,17 @@ const executeTrustSearch = async (searchParams) => {
 
     let queryFilter = {};
     if (q) queryFilter.$text = { $search: q };
-    if (category) queryFilter.category = category;
+    if (category) {
+        const categoryValue = String(category).trim();
+        if (mongoose.Types.ObjectId.isValid(categoryValue)) {
+            // Aggregation pipelines do not cast string IDs like Mongoose queries do.
+            queryFilter.category = new mongoose.Types.ObjectId(categoryValue);
+        } else {
+            const escapedName = categoryValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const categoryDoc = await Category.findOne({ name: { $regex: `^${escapedName}$`, $options: 'i' } }).select('_id');
+            queryFilter.category = categoryDoc?._id || null;
+        }
+    }
     if (minPrice || maxPrice) {
         queryFilter.price = {};
         if (minPrice) queryFilter.price.$gte = Number(minPrice);

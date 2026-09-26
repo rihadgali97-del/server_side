@@ -7,6 +7,8 @@ const paymentController = require('../controller/paymentController');
 const requiredHandlers = [
   'stripeWebhook',
   'telebirrWebhook',
+  'chapaCallback',
+  'verifyChapaPayment',
   'createPaymentIntent',
   'verifyPayment',
   'initiateTelebirrPayment',
@@ -26,10 +28,12 @@ requiredHandlers.forEach((handler) => {
 // ── PUBLIC (Telebirr / Stripe call these directly, no auth token) ──────────
 router.post('/webhook',           paymentController.stripeWebhook);
 router.post('/telebirr-webhook',  paymentController.telebirrWebhook);
+router.get('/chapa/callback', paymentController.chapaCallback);
 
 // ── PROTECTED ──────────────────────────────────────────────────────────────
 router.post('/create-payment-intent', protect, paymentController.createPaymentIntent);
 router.put( '/verify/:id',            protect, paymentController.verifyPayment);
+router.post('/chapa/verify/:id', protect, paymentController.verifyChapaPayment);
 router.post('/initiate-telebirr',     protect, paymentController.initiateTelebirrPayment);
 router.post('/initiate-wallet-deposit', protect, paymentController.initiateWalletDeposit); // 🆕 Standalone Top-up URL
 router.post('/pay-with-wallet',       protect, paymentController.payWithWallet);          // 🆕 Internal Balance Checkout

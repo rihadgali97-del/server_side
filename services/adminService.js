@@ -133,12 +133,34 @@ const processVendorVerification = async (id, body, adminId, ip) => {
 
 const fetchProducts = async (page, limit) => {
     const skip = (page - 1) * limit;
-    const products = await Product.find()
+    const productRows = await Product.find()
         .populate('category', 'name')
-        .populate('vendor', 'businessName')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit);
+        .limit(limit)
+        .lean();
+    const vendorIds = productRows.map(product => product.vendor).filter(Boolean);
+    const vendorProfiles = await Vendor.find({
+        $or: [
+            { _id: { $in: vendorIds } },
+            { user: { $in: vendorIds } }
+        ]
+    }).select('businessName logo user').populate('user', 'name email').lean();
+    const vendorById = new Map(vendorProfiles.map(vendor => [vendor._id.toString(), vendor]));
+    const vendorByUserId = new Map(vendorProfiles.map(vendor => [vendor.user?._id?.toString(), vendor]).filter(([id]) => id));
+    const products = productRows.map(product => {
+        const vendorId = product.vendor?.toString();
+        const vendor = vendorById.get(vendorId) || vendorByUserId.get(vendorId);
+        return {
+            ...product,
+            vendor: vendor ? {
+                _id: vendor._id,
+                businessName: vendor.businessName,
+                logo: vendor.logo,
+                user: vendor.user
+            } : null
+        };
+    });
     const total = await Product.countDocuments();
     return { products, total };
 };

@@ -5,6 +5,7 @@ const Wallet      = require('../models/Wallet');
 const telebirrService = require('../services/payment/telebirrService');
 const WalletService   = require('../services/WalletService');
 const notificationService = require('../services/notificationService'); 
+const chapaService = require('../services/payment/chapaService');
 
 const DEFAULT_CURRENCY = 'ETB';
 const gatewayRegistry  = new Map();
@@ -418,4 +419,61 @@ exports.stripeWebhook = async (req, res) => {
 
 exports.verifyPayment = async (req, res) => {
   return res.status(200).json({ success: true, status: 'completed', message: 'Stripe simulation verified' });
+};
+
+const confirmChapaPayment = async (order, txRef) => {
+  if (!order || order.paymentMethod !== 'chapa' || order.paymentReference !== txRef) {
+    throw new Error('Chapa reference does not match this order.');
+  }
+  const verification = await chapaService.verifyTransaction(txRef);
+  const payment = verification?.data;
+  const paid = verification?.status === 'success'
+    && String(payment?.status).toLowerCase() === 'success'
+    && payment?.tx_ref === txRef
+    && Number(payment?.amount) === Number(order.totalPrice)
+    && String(payment?.currency).toUpperCase() === (process.env.CHAPA_CURRENCY || 'ETB').toUpperCase();
+  if (!paid) return false;
+
+  if (!order.isPaid) {
+    order.isPaid = true;
+    order.paidAt = new Date();
+    order.status = 'processing';
+    await order.save();
+  }
+  return true;
+};
+
+exports.verifyChapaPayment = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (order.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'You cannot verify this order.' });
+    }
+    const txRef = req.body?.tx_ref || order.paymentReference;
+    const success = await confirmChapaPayment(order, txRef);
+    if (!success) return res.status(402).json({ success: false, message: 'Chapa has not confirmed this payment.' });
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    console.error('Chapa payment verification failed:', error.message);
+    return res.status(502).json({ success: false, message: error.message });
+  }
+};
+
+exports.chapaCallback = async (req, res) => {
+  const txRef = req.query.trx_ref || req.query.tx_ref;
+  const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  try {
+    if (!txRef) throw new Error('Missing Chapa transaction reference.');
+    const order = await Order.findOne({ paymentReference: txRef });
+    if (!order) throw new Error('No order matches the Chapa transaction reference.');
+    const success = await confirmChapaPayment(order, txRef);
+    const paymentState = success ? '' : '&payment=failed';
+    return res.redirect(`${frontendUrl}/payment-success?orderId=${order._id}&provider=chapa${paymentState}`);
+  } catch (error) {
+    console.error('Chapa callback failed:', error.message);
+    const order = txRef ? await Order.findOne({ paymentReference: txRef }).select('_id') : null;
+    const query = order ? `?orderId=${order._id}&provider=chapa&payment=failed` : '?provider=chapa&payment=failed';
+    return res.redirect(`${frontendUrl}/payment-success${query}`);
+  }
 };

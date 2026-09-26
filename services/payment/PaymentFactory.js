@@ -1,5 +1,6 @@
 const TelebirrGateway = require('./TelebirrGateway');
 const CBEGateway = require('./CBEGateway'); // Placeholder for now
+const ChapaGateway = require('./ChapaGateway');
 
 class PaymentFactory {
   getGateway(method) {
@@ -8,6 +9,8 @@ class PaymentFactory {
         return TelebirrGateway;
       case 'cbe':
         return CBEGateway;
+      case 'chapa':
+        return ChapaGateway;
       default:
         return null; // For Cash on Delivery
     }

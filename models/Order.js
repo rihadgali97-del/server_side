@@ -32,11 +32,12 @@ const orderSchema = new mongoose.Schema(
     totalPrice: { type: Number, required: true },
     paymentMethod: {
       type: String,
-      enum: ["telebirr", "stripe", "wallet", "cbe", "cash"], // Clean, standardized lowercase enums
+      enum: ["telebirr", "stripe", "wallet", "cbe", "chapa", "cash"], // Clean, standardized lowercase enums
       default: "cash",
       lowercase: true // Automatically converts strings like "Telebirr" to "telebirr" before validating
     },
     isPaid: { type: Boolean, default: false },
+    paymentReference: { type: String },
     paidAt: { type: Date },
     status: {
       type: String,

@@ -48,11 +48,15 @@ exports.createOrder = async (req, res) => {
     });
 
     // 2. Apply coupon if present
+    let couponUsageRecorded = false;
+    let couponUserWasAlreadyRecorded = false;
     if (couponCode) {
       const coupon = await Coupon.findOne({ code: couponCode.toUpperCase() });
       if (coupon) {
         coupon.usedCount += 1;
-        if (!coupon.usedBy.includes(req.user._id)) {
+        couponUsageRecorded = true;
+        couponUserWasAlreadyRecorded = coupon.usedBy.includes(req.user._id);
+        if (!couponUserWasAlreadyRecorded) {
           coupon.usedBy.push(req.user._id);
         }
         await coupon.save();
@@ -77,6 +81,20 @@ exports.createOrder = async (req, res) => {
       const gateway = paymentFactory.getGateway(paymentMethod);
       if (gateway) {
         paymentInfo = await gateway.processPayment(order, totalPrice);
+        if (paymentMethod === 'chapa') {
+          if (!paymentInfo?.success) {
+            await Order.findByIdAndDelete(order._id);
+            if (couponUsageRecorded) {
+              const rollback = { $inc: { usedCount: -1 } };
+              if (!couponUserWasAlreadyRecorded) rollback.$pull = { usedBy: req.user._id };
+              await Coupon.findOneAndUpdate({ code: couponCode.toUpperCase() }, rollback);
+            }
+            return res.status(502).json({ success: false, message: paymentInfo?.message || 'Chapa checkout could not be started.' });
+          }
+          order.paymentReference = paymentInfo.txRef;
+          await order.save();
+          paymentInfo = { url: paymentInfo.checkoutUrl, tx_ref: paymentInfo.txRef };
+        }
       }
     }
 
